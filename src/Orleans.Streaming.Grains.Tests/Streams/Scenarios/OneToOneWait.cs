@@ -5,7 +5,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using NUnit.Framework;
+using Xunit;
 using Orleans.Hosting;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.Services;
@@ -93,13 +93,13 @@ namespace Orleans.Streaming.Grains.Test.Scenarios
                 await WaitFor(() => result);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver()
             {
                 Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected()
             {
                 expected.ShouldEqual(result);
@@ -137,13 +137,13 @@ namespace Orleans.Streaming.Grains.Test.Scenarios
                 await WaitFor(() => result);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver()
             {
                 Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected()
             {
                 expected.ShouldEqual(result);
