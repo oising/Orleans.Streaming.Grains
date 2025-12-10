@@ -43,7 +43,7 @@ namespace Orleans.Streaming.Grains.Grains
 
             var timeout = _options.RetryTimeout / 10;
 
-            _ = RegisterTimer(FlushTimerAsync, null, timeout, timeout);
+            _ = this.RegisterGrainTimer(FlushTimerAsync, timeout, timeout);
 
             await base.OnActivateAsync(cancellationToken);
         }
@@ -120,8 +120,9 @@ namespace Orleans.Streaming.Grains.Grains
 
         public async Task FlushAsync()
         {
-            var expired = State.Transactions.Where(x => (DateTimeOffset.UtcNow - x.Value.Retried) > _options.RetryTimeout)
-                                            .ToList();
+            var expired = State.Transactions
+                .Where(x => (DateTimeOffset.UtcNow - x.Value.Retried) > _options.RetryTimeout)
+                .ToList();
 
             if (expired.Any())
             {
@@ -142,9 +143,9 @@ namespace Orleans.Streaming.Grains.Grains
             await PersistAsync();
         }
 
-        private async Task FlushTimerAsync(object arg)
+        private async Task FlushTimerAsync(CancellationToken cancellationToken)
         {
-            await Task.Run(async () => await this.AsReference<ITransactionGrain>().FlushAsync());
+            await this.AsReference<ITransactionGrain>().FlushAsync();
         }
 
         private async Task PersistAsync()

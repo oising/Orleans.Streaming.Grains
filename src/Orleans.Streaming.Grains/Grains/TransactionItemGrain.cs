@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Orleans.Concurrency;
@@ -22,7 +23,7 @@ namespace Orleans.Streaming.Grains.Grains
         {
             _deleted = true;
 
-            _ = RegisterTimer(PersistTimerAsync, null, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
+            _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
 
             return Task.CompletedTask;
         }
@@ -46,7 +47,7 @@ namespace Orleans.Streaming.Grains.Grains
 
             State.Item = item;
 
-            _ = RegisterTimer(PersistTimerAsync, null, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
+            _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
 
             return Task.CompletedTask;
         }
@@ -63,9 +64,9 @@ namespace Orleans.Streaming.Grains.Grains
             }
         }
 
-        private async Task PersistTimerAsync(object arg)
+        private async Task PersistTimerAsync(CancellationToken cancellationToken)
         {
-            await Task.Run(async () => await this.AsReference<ITransactionItemGrain<T>>().PersistAsync());
+            await this.AsReference<ITransactionItemGrain<T>>().PersistAsync();
         }
     }
 }
