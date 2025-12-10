@@ -4,6 +4,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<OutputType>Exe</OutputType>
 		<NoWarn>NU1608</NoWarn>
+		<IsTestingPlatformApplication>false</IsTestingPlatformApplication>
 	</PropertyGroup>
 	<PropertyGroup>
 		<PlatformTarget>AnyCPU</PlatformTarget>
