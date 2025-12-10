@@ -2,20 +2,14 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using NUnit.Framework;
-using Orleans;
 using Orleans.Concurrency;
-using Orleans.Providers;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.Services;
 using Orleans.Streaming.Grains.Test;
 using Should;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Tests.Services
 {
@@ -75,31 +69,31 @@ namespace Orleans.Streaming.Grains.Tests.Services
 
         public class WhenPosting : BaseTransactionServiceTest
         {
-            public override async Task SetupAsync()
+            public override async ValueTask InitializeAsync()
             {
-                await base.SetupAsync();
+                await base.InitializeAsync();
                 await Subject.PostAsync(item, false, "1");
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Get_Item()
             {
                 client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Once);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Get_Transaction()
             {
                 client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Once);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Set_Item()
             {
                 message.Verify(x => x.SetAsync(item), Times.Once);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Post_Id()
             {
                 transaction.Verify(x => x.PostAsync(itemId), Times.Once);
@@ -110,20 +104,20 @@ namespace Orleans.Streaming.Grains.Tests.Services
         {
             protected List<(Guid Id, Immutable<int> Item)> results;
 
-            public override async Task SetupAsync()
+            public override async ValueTask InitializeAsync()
             {
-                await base.SetupAsync();
+                await base.InitializeAsync();
 
                 results = await Subject.PopAsync<int>("1", 1);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Null()
             {
                 results.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Pop()
             {
                 transaction.Verify(x => x.PopAsync(1), Times.Once);
@@ -134,66 +128,66 @@ namespace Orleans.Streaming.Grains.Tests.Services
         {
             protected List<(Guid Id, Immutable<int> Item)> results;
 
-            public override async Task SetupAsync()
+            public override async ValueTask InitializeAsync()
             {
                 message.Setup(x => x.GetAsync())
                        .ReturnsAsync(item);
 
-                await base.SetupAsync();
+                await base.InitializeAsync();
                 await Subject.PostAsync(item, false, "1");
 
                 results = await Subject.PopAsync<int>("1", 1);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return()
             {
                 results.ShouldNotBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Id()
             {
                 results.First().Id.ShouldEqual(itemId);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Item()
             {
                 results.First().Item.ShouldEqual(item);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Get_Reader()
             {
                 client.Verify(x => x.GetGrain<ITransactionReaderGrain<int>>("1", null), Times.Exactly(1));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Get_Item()
             {
                 client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Exactly(1));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Get_Transaction()
             {
                 client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Exactly(2));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Set_Item()
             {
                 message.Verify(x => x.SetAsync(item), Times.Once);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Post_Id()
             {
                 transaction.Verify(x => x.PostAsync(itemId), Times.Once);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Pop()
             {
                 transaction.Verify(x => x.PopAsync(1), Times.Once);

@@ -2,21 +2,17 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
-using NUnit.Framework;
-using Orleans.Configuration;
-using Orleans.Hosting;
 using Orleans.Streaming.Grains.Abstract;
-using Orleans.Streaming.Grains.Services;
 using Orleans.Streaming.Grains.State;
 using Orleans.Streaming.Grains.Streams;
 using Orleans.Streaming.Grains.Test;
 using Orleans.Streaming.Grains.Tests.Streams.Grains;
 using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
 {
@@ -60,14 +56,14 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
 
         public abstract class BaseOneToManyWaitTest : BaseGrainTest<Config>
         {
-            protected IOptions<GrainsOptions> Settings;
+            protected IOptions<GrainsOptions> settings;
 
             protected Mock<IProcessor> Processor { get; set; }
 
             public override void Prepare()
             {
                 Processor = Container.GetService<Mock<IProcessor>>();
-                Settings = Container.GetService<IOptions<GrainsOptions>>();
+                settings = Container.GetService<IOptions<GrainsOptions>>();
 
                 base.Prepare();
             }
@@ -112,34 +108,34 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Text()
             {
                 Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Text()
             {
                 expectedText.ShouldEqual(resultText);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Data()
             {
                 Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Data()
             {
                 expectedData.ShouldEqual(resultData);
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Queue()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -148,10 +144,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Poison()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -160,10 +156,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Transactions()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -209,34 +205,34 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Text()
             {
                 Processor!.Verify(x => x.Process(expectedText), Times.Exactly(20));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Text()
             {
                 expectedText.ShouldEqual(resultText);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Data()
             {
                 Processor!.Verify(x => x.Process(expectedData), Times.Exactly(20));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Data()
             {
                 expectedData.ShouldEqual(resultData);
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Queue()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -245,10 +241,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Poison()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -257,10 +253,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Transactions()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -309,34 +305,34 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
-            [Test]
-            public void It_Should_Deliver_Text() 
+            [Fact]
+            public void It_Should_Deliver_Text()
             {
                 Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Text()
             {
                 expectedText.ShouldEqual(resultText);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Data()
             {
                 Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected_Data()
             {
                 expectedData.ShouldEqual(resultData);
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Queue()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -345,10 +341,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Poison()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -357,10 +353,10 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 }
             }
 
-            [Test]
+            [Fact]
             public async Task It_Should_Empty_Transactions()
             {
-                for (var i = 0; i < Settings.Value.QueueCount; i++)
+                for (var i = 0; i < settings.Value.QueueCount; i++)
                 {
                     var grain = Subject.GetGrain<ITransactionGrain>($"default-{i}");
                     var state = await grain.GetStateAsync();
@@ -413,43 +409,43 @@ namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
                 state = await transaction.GetStateAsync();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Text()
             {
                 Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Not_Deliver_Expected_Text()
             {
                 resultText.ShouldBeNull();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Data()
             {
                 Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Not_Deliver_Expected_Data()
             {
                 resultData.ShouldBeNull();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Poison_Single()
             {
                 state.Poison.Count.ShouldEqual(1);
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Queue_Empty()
             {
                 state.Queue.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Transactions_Empty()
             {
                 state.Transactions.ShouldBeEmpty();

@@ -28,11 +28,11 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
-    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="all" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Client" Version="9.2.1" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Orleans.Client" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" />
     <PackageReference Include="Microsoft.Orleans.Streaming" Version="9.2.1" />
   </ItemGroup>
 </Project>

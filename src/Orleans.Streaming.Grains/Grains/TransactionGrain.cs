@@ -145,7 +145,7 @@ namespace Orleans.Streaming.Grains.Grains
 
         private async Task FlushTimerAsync(CancellationToken cancellationToken)
         {
-            await this.AsReference<ITransactionGrain>().FlushAsync();
+            await FlushAsync();
         }
 
         private async Task PersistAsync()

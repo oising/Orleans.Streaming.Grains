@@ -26,7 +26,7 @@
 		<ProjectReference Include="..\Orleans.Streaming.Grains.Tests\Orleans.Streaming.Grains.Tests.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="all" />
+		<PackageReference Include="StyleCop.Analyzers" Version="1.1.118" />
 		<PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
 		<PackageReference Include="Microsoft.Orleans.BroadcastChannel" Version="9.2.1" />
 	</ItemGroup>

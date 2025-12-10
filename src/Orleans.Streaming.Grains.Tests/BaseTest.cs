@@ -3,11 +3,11 @@
 // </copyright>
 
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Test
 {
-    public abstract class BaseTest<T>
+    public abstract class BaseTest<T> : IAsyncLifetime
         where T : class
     {
         public BaseTest()
@@ -19,8 +19,7 @@ namespace Orleans.Streaming.Grains.Test
 
         public ServiceCollection Services { get; }
 
-        [OneTimeSetUp]
-        public virtual Task SetupAsync()
+        public virtual ValueTask InitializeAsync()
         {
             if (Services.All(x => x.ServiceType != typeof(T)))
             {
@@ -43,7 +42,12 @@ namespace Orleans.Streaming.Grains.Test
                 }
             }
 
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
+        }
+
+        public virtual ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
         }
     }
 }

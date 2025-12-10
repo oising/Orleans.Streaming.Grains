@@ -2,16 +2,8 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
-using NUnit.Framework;
-using Orleans;
 using Orleans.Concurrency;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.Services;
@@ -19,6 +11,7 @@ using Orleans.Streaming.Grains.State;
 using Orleans.Streaming.Grains.Streams;
 using Orleans.Streaming.Grains.Test;
 using Should;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Tests.Grains
 {
@@ -56,7 +49,7 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 results = await service.PopAsync<int>("1", 1);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Null()
             {
                 results.ShouldBeEmpty();
@@ -72,19 +65,19 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 base.Prepare();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return()
             {
                 results.ShouldNotBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Item()
             {
                 results.First().Item.Value.ShouldEqual(100);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Id()
             {
                 results.First().Id.ShouldNotEqual(Guid.Empty);
@@ -104,19 +97,19 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 state = await transaction.GetStateAsync();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Poison_Empty()
             {
                 state.Poison.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Queue_Empty()
             {
                 state.Queue.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Transactions_Single()
             {
                 state.Transactions.Count.ShouldEqual(1);
@@ -138,19 +131,19 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 state = await transaction.GetStateAsync();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Poison_Empty()
             {
                 state.Poison.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Queue_One()
             {
                 state.Queue.Count.ShouldEqual(1);
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Transactions_Empty()
             {
                 state.Transactions.Count.ShouldEqual(1);
@@ -176,25 +169,25 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 state = await transaction.GetStateAsync();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Second_Null()
             {
                 results2.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Poison_Empty()
             {
                 state.Poison.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Queue_Empty()
             {
                 state.Queue.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Transactions_Empty()
             {
                 state.Transactions.ShouldBeEmpty();
@@ -220,25 +213,25 @@ namespace Orleans.Streaming.Grains.Tests.Grains
                 state = await transaction.GetStateAsync();
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Return_Second_Null()
             {
                 results2.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Poison_Single()
             {
                 state.Poison.Count.ShouldEqual(1);
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Queue_Empty()
             {
                 state.Queue.ShouldBeEmpty();
             }
 
-            [Test]
+            [Fact]
             public void State_Should_Have_Transactions_Empty()
             {
                 state.Transactions.ShouldBeEmpty();

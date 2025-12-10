@@ -3,15 +3,15 @@
 // </copyright>
 
 using System.Diagnostics;
-using NUnit.Framework;
 using Orleans.Runtime;
 using Orleans.TestingHost;
 using Polly;
 using Polly.Retry;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Test
 {
-    public abstract class BaseGrainTest<T>
+    public abstract class BaseGrainTest<T> : IAsyncLifetime
         where T : ISiloConfigurator, IClientBuilderConfigurator, new()
     {
         private readonly TestCluster _cluster;
@@ -45,8 +45,7 @@ namespace Orleans.Streaming.Grains.Test
 
         public abstract Task Act();
 
-        [OneTimeSetUp]
-        public async Task SetupAsync()
+        public async ValueTask InitializeAsync()
         {
             await _retryPolicy.ExecuteAsync(async () =>
             {
@@ -59,8 +58,7 @@ namespace Orleans.Streaming.Grains.Test
             await Act();
         }
 
-        [OneTimeTearDown]
-        public async Task TearDown()
+        public async ValueTask DisposeAsync()
         {
             await _cluster.StopAllSilosAsync();
             await _cluster.DisposeAsync();

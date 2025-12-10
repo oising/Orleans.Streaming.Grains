@@ -2,18 +2,13 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using NUnit.Framework;
-using Orleans.Hosting;
-using Orleans.Streaming.Grains.Abstract;
-using Orleans.Streaming.Grains.Services;
-using Orleans.Streaming.Grains.Streams;
 using Orleans.Streaming.Grains.Test;
 using Orleans.Streaming.Grains.Tests.Streams.Grains;
 using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
+using Xunit;
 
 namespace Orleans.Streaming.Grains.Test.Scenarios
 {
@@ -93,13 +88,13 @@ namespace Orleans.Streaming.Grains.Test.Scenarios
                 await WaitFor(() => result);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver()
             {
                 Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected()
             {
                 expected.ShouldEqual(result);
@@ -137,13 +132,13 @@ namespace Orleans.Streaming.Grains.Test.Scenarios
                 await WaitFor(() => result);
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver()
             {
                 Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
             }
 
-            [Test]
+            [Fact]
             public void It_Should_Deliver_Expected()
             {
                 expected.ShouldEqual(result);
