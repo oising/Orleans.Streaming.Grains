@@ -13,60 +13,59 @@ using Orleans.Concurrency;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.State;
 
-namespace Orleans.Streaming.Grains.Grains
+namespace Orleans.Streaming.Grains.Grains;
+
+public class TransactionItemGrain<T> : Grain<TransactionItemGrainState<T>>, ITransactionItemGrain<T>
 {
-    public class TransactionItemGrain<T> : Grain<TransactionItemGrainState<T>>, ITransactionItemGrain<T>
+    private bool _deleted;
+
+    public Task DeleteAsync()
     {
-        private bool _deleted;
+        _deleted = true;
 
-        public Task DeleteAsync()
+        _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
+
+        return Task.CompletedTask;
+    }
+
+    public Task<Immutable<T>> GetAsync()
+    {
+        if (!_deleted)
         {
-            _deleted = true;
-
-            _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
-
-            return Task.CompletedTask;
+            return Task.FromResult(State.Item);
         }
 
-        public Task<Immutable<T>> GetAsync()
-        {
-            if (!_deleted)
-            {
-                return Task.FromResult(State.Item);
-            }
+        return Task.FromResult(new Immutable<T>(default));
+    }
 
-            return Task.FromResult(new Immutable<T>(default));
+    public Task SetAsync(Immutable<T> item)
+    {
+        if (_deleted)
+        {
+            throw new DataException("Cannot set state of a deleted TransactionItem.");
         }
 
-        public Task SetAsync(Immutable<T> item)
+        State.Item = item;
+
+        _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
+
+        return Task.CompletedTask;
+    }
+
+    public async Task PersistAsync()
+    {
+        if (_deleted)
         {
-            if (_deleted)
-            {
-                throw new DataException("Cannot set state of a deleted TransactionItem.");
-            }
-
-            State.Item = item;
-
-            _ = this.RegisterGrainTimer(PersistTimerAsync, TimeSpan.FromSeconds(1), TimeSpan.FromDays(1));
-
-            return Task.CompletedTask;
+            await ClearStateAsync();
         }
-
-        public async Task PersistAsync()
+        else
         {
-            if (_deleted)
-            {
-                await ClearStateAsync();
-            }
-            else
-            {
-                await WriteStateAsync();
-            }
+            await WriteStateAsync();
         }
+    }
 
-        private async Task PersistTimerAsync(CancellationToken cancellationToken)
-        {
-            await PersistAsync();
-        }
+    private async Task PersistTimerAsync(CancellationToken cancellationToken)
+    {
+        await PersistAsync();
     }
 }

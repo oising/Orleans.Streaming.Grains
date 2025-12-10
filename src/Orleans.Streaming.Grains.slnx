@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Orleans.Streaming.Grains/Orleans.Streaming.Grains.csproj" />
+  <Project Path="Orleans.Streaming.Grains.Tests/Orleans.Streaming.Grains.Tests.csproj" />
+  <Project Path="Orleans.Streaming.Grains.Tests.Shared/Orleans.Streaming.Grains.Tests.Shared.csproj" />
+  <Project Path="Orleans.Streaming.Grains.Performance/Orleans.Streaming.Grains.Performance.csproj" />
+</Solution>

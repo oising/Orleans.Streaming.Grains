@@ -2,9 +2,8 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-namespace Orleans.Streaming.Grains.Tests.Streams.Grains
+namespace Orleans.Streaming.Grains.Tests.Streams.Grains;
+
+public interface IBlobReceiverGrain : IGrainWithGuidKey
 {
-    public interface IBlobReceiverGrain : IGrainWithGuidKey
-    {
-    }
 }

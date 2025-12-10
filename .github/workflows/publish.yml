@@ -13,7 +13,8 @@ on:
     paths:
       - "src/Orleans.Streaming.Grains/**"
       - "src/Orleans.Streaming.Grains.Tests/**"
-      - "src/*.sln"
+      - "src/Orleans.Streaming.Grains.Tests.Shared/**"
+      - "src/*.slnx"
       - "src/*.config"
       - "src/nuget.dockerfile"
 

@@ -8,15 +8,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Orleans.Runtime;
 
-namespace Orleans.Streaming.Grains.Streams
-{
-    [GenerateSerializer]
-    public class GrainsMessage
-    {
-        [Id(0)]
-        public StreamId StreamId { get; set; }
+namespace Orleans.Streaming.Grains.Streams;
 
-        [Id(1)]
-        public byte[] Data { get; set; }
-    }
+[GenerateSerializer]
+public class GrainsMessage
+{
+    [Id(0)]
+    public StreamId StreamId { get; set; }
+
+    [Id(1)]
+    public byte[] Data { get; set; }
 }

@@ -8,59 +8,58 @@ using BenchmarkDotNet.Exporters;
 using BenchmarkDotNet.Loggers;
 using BenchmarkDotNet.Running;
 
-namespace Orleans.Streaming.Grains.Performance
+namespace Orleans.Streaming.Grains.Performance;
+
+public class Program
 {
-    public class Program
+    public static void Main(string[] args)
     {
-        public static void Main(string[] args)
-        {
 #if DEBUG
-            RunVerbose(args);
+        RunVerbose(args);
 #else
-            // Run(args);
-            RunSummaries(args);
+        // Run(args);
+        RunSummaries(args);
 #endif
-        }
+    }
 
-        private static void Run(string[] args)
+    private static void Run(string[] args)
+    {
+        var config = DefaultConfig.Instance;
+
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
+                         .Run(args, config);
+    }
+
+    private static void RunVerbose(string[] args)
+    {
+        var config = new DebugInProcessConfig();
+
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
+                         .Run(args, config);
+    }
+
+    private static void RunSummaries(string[] args)
+    {
+        var config = new ManualConfig
         {
-            var config = DefaultConfig.Instance;
+            UnionRule = ConfigUnionRule.AlwaysUseGlobal
+        };
 
-            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
-                             .Run(args, config);
-        }
+        config.AddJob(DefaultConfig.Instance.GetJobs().ToArray());
+        config.AddExporter(DefaultConfig.Instance.GetExporters().ToArray());
+        config.AddAnalyser(DefaultConfig.Instance.GetAnalysers().ToArray());
+        config.AddDiagnoser(DefaultConfig.Instance.GetDiagnosers().ToArray());
+        config.AddValidator(DefaultConfig.Instance.GetValidators().ToArray());
+        config.AddColumnProvider(DefaultConfig.Instance.GetColumnProviders().ToArray());
 
-        private static void RunVerbose(string[] args)
+        var logger = ConsoleLogger.Default;
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
+                                         .Run(args, config);
+
+        foreach (var summary in summaries)
         {
-            var config = new DebugInProcessConfig();
-
-            BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
-                             .Run(args, config);
-        }
-
-        private static void RunSummaries(string[] args)
-        {
-            var config = new ManualConfig
-            {
-                UnionRule = ConfigUnionRule.AlwaysUseGlobal
-            };
-
-            config.AddJob(DefaultConfig.Instance.GetJobs().ToArray());
-            config.AddExporter(DefaultConfig.Instance.GetExporters().ToArray());
-            config.AddAnalyser(DefaultConfig.Instance.GetAnalysers().ToArray());
-            config.AddDiagnoser(DefaultConfig.Instance.GetDiagnosers().ToArray());
-            config.AddValidator(DefaultConfig.Instance.GetValidators().ToArray());
-            config.AddColumnProvider(DefaultConfig.Instance.GetColumnProviders().ToArray());
-
-            var logger = ConsoleLogger.Default;
-            var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly)
-                                             .Run(args, config);
-
-            foreach (var summary in summaries)
-            {
-                MarkdownExporter.Console.ExportToLog(summary, logger);
-                ConclusionHelper.Print(logger, summary.BenchmarksCases.First().Config.GetCompositeAnalyser().Analyse(summary).ToList());
-            }
+            MarkdownExporter.Console.ExportToLog(summary, logger);
+            ConclusionHelper.Print(logger, summary.BenchmarksCases.First().Config.GetCompositeAnalyser().Analyse(summary).ToList());
         }
     }
 }

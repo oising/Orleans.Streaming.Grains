@@ -14,508 +14,507 @@ using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
 using Xunit;
 
-namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios
+namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios;
+
+public class OneToMany
 {
-    public class OneToMany
+    public class Config : BaseGrainTestConfig, IDisposable
     {
-        public class Config : BaseGrainTestConfig, IDisposable
+        protected Mock<IProcessor> processor = new Mock<IProcessor>();
+        private bool _isDisposed;
+
+        public Config()
+         : base(false)
         {
-            protected Mock<IProcessor> processor = new Mock<IProcessor>();
-            private bool _isDisposed;
+        }
 
-            public Config()
-             : base(false)
-            {
-            }
+        public override void Configure(IServiceCollection services)
+        {
+            services.AddSingleton(processor);
+            services.AddSingleton(processor.Object);
+        }
 
-            public override void Configure(IServiceCollection services)
-            {
-                services.AddSingleton(processor);
-                services.AddSingleton(processor.Object);
-            }
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
 
-            public void Dispose()
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
             {
-                Dispose(true);
-                GC.SuppressFinalize(this);
-            }
-
-            protected virtual void Dispose(bool disposing)
-            {
-                if (!_isDisposed)
+                if (disposing)
                 {
-                    if (disposing)
-                    {
-                        /* dispose code here */
-                    }
-
-                    _isDisposed = true;
+                    /* dispose code here */
                 }
+
+                _isDisposed = true;
+            }
+        }
+    }
+
+    public abstract class BaseOneToManyTest : BaseGrainTest<Config>
+    {
+        protected IOptions<GrainsOptions> settings;
+
+        protected Mock<IProcessor> Processor { get; set; }
+
+        public override void Prepare()
+        {
+            Processor = Container.GetService<Mock<IProcessor>>();
+            settings = Container.GetService<IOptions<GrainsOptions>>();
+
+            base.Prepare();
+        }
+    }
+
+    public class When_Sending_Compound_Message_One_To_Many : BaseOneToManyTest
+    {
+        protected string resultText;
+        protected string expectedText = "text";
+
+        protected byte[] resultData;
+        protected byte[] expectedData = new byte[1024];
+
+        public override void Prepare()
+        {
+            base.Prepare();
+
+            Processor!.Setup(x => x.Process(It.IsAny<string>()))
+                      .Callback<string>(x => resultText = x);
+
+            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
+                      .Callback<byte[]>(x => resultData = x);
+
+            for (var i = 0; i < 1024; i++)
+            {
+                expectedData[i] = Convert.ToByte(i % 2);
             }
         }
 
-        public abstract class BaseOneToManyTest : BaseGrainTest<Config>
+        public override async Task Act()
         {
-            protected IOptions<GrainsOptions> settings;
-
-            protected Mock<IProcessor> Processor { get; set; }
-
-            public override void Prepare()
-            {
-                Processor = Container.GetService<Mock<IProcessor>>();
-                settings = Container.GetService<IOptions<GrainsOptions>>();
-
-                base.Prepare();
-            }
-        }
-
-        public class When_Sending_Compound_Message_One_To_Many : BaseOneToManyTest
-        {
-            protected string resultText;
-            protected string expectedText = "text";
-
-            protected byte[] resultData;
-            protected byte[] expectedData = new byte[1024];
-
-            public override void Prepare()
-            {
-                base.Prepare();
-
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Callback<string>(x => resultText = x);
-
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Callback<byte[]>(x => resultData = x);
-
-                for (var i = 0; i < 1024; i++)
-                {
-                    expectedData[i] = Convert.ToByte(i % 2);
-                }
-            }
-
-            public override async Task Act()
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                    await grain.CompoundAsync(expectedText, expectedData);
-                }
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Text()
-            {
-                Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Text()
-            {
-                expectedText.ShouldEqual(resultText);
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Data()
-            {
-                Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Data()
-            {
-                expectedData.ShouldEqual(resultData);
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Queue()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Queue.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Poison()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Poison.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Transactions()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Transactions.ShouldBeEmpty();
-                }
-            }
-        }
-
-        public class When_Sending_Explosive_Message_One_To_Many : BaseOneToManyTest
-        {
-            protected string resultText;
-            protected string expectedText = "text";
-
-            protected byte[] resultData;
-            protected byte[] expectedData = new byte[1024];
-
-            public override void Prepare()
-            {
-                base.Prepare();
-
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Callback<string>(x => resultText = x);
-
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Callback<byte[]>(x => resultData = x);
-
-                for (var i = 0; i < 1024; i++)
-                {
-                    expectedData[i] = Convert.ToByte(i % 2);
-                }
-            }
-
-            public override async Task Act()
+            for (var i = 0; i < 10; i++)
             {
                 var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
 
-                await grain.ExplosiveAsync(expectedText, expectedData);
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Text()
-            {
-                Processor!.Verify(x => x.Process(expectedText), Times.Exactly(20));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Text()
-            {
-                expectedText.ShouldEqual(resultText);
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Data()
-            {
-                Processor!.Verify(x => x.Process(expectedData), Times.Exactly(20));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Data()
-            {
-                expectedData.ShouldEqual(resultData);
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Queue()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Queue.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Poison()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Poison.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Transactions()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Transactions.ShouldBeEmpty();
-                }
+                await grain.CompoundAsync(expectedText, expectedData);
             }
         }
 
-        public class When_Sending_Broadcast_Message_One_To_Many : BaseOneToManyTest
+        [Fact]
+        public void It_Should_Deliver_Text()
         {
-            protected string resultText;
-            protected string expectedText = "text";
-
-            protected byte[] resultData;
-            protected byte[] expectedData = new byte[1024];
-
-            public override void Prepare()
-            {
-                base.Prepare();
-
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Callback<string>(x => resultText = x);
-
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Callback<byte[]>(x => resultData = x);
-
-                for (var i = 0; i < 1024; i++)
-                {
-                    expectedData[i] = Convert.ToByte(i % 2);
-                }
-            }
-
-            public override async Task Act()
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                    await grain.BroadcastAsync(expectedText, expectedData);
-                }
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Text()
-            {
-                Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Text()
-            {
-                expectedText.ShouldEqual(resultText);
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Data()
-            {
-                Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Expected_Data()
-            {
-                expectedData.ShouldEqual(resultData);
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Queue()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Queue.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Poison()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Poison.ShouldBeEmpty();
-                }
-            }
-
-            [Fact]
-            public async Task It_Should_Empty_Transactions()
-            {
-                for (var i = 0; i < settings.Value.QueueCount; i++)
-                {
-                    var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                    var state = await grain.GetStateAsync();
-
-                    state.Transactions.ShouldBeEmpty();
-                }
-            }
+            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
         }
 
-        public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+        [Fact]
+        public void It_Should_Deliver_Expected_Text()
         {
-            protected TransactionGrainState state;
+            expectedText.ShouldEqual(resultText);
+        }
 
-            protected string resultText;
-            protected string expectedText = "text";
+        [Fact]
+        public void It_Should_Deliver_Data()
+        {
+            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
+        }
 
-            protected byte[] resultData;
-            protected byte[] expectedData = new byte[1024];
+        [Fact]
+        public void It_Should_Deliver_Expected_Data()
+        {
+            expectedData.ShouldEqual(resultData);
+        }
 
-            public override void Prepare()
+        [Fact]
+        public async Task It_Should_Empty_Queue()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
             {
-                base.Prepare();
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
 
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Throws<Exception>();
-
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Throws<Exception>();
-
-                for (var i = 0; i < 1024; i++)
-                {
-                    expectedData[i] = Convert.ToByte(i % 2);
-                }
-            }
-
-            public override async Task Act()
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-                var transaction = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-0");
-
-                await grain.BroadcastAsync(expectedText, expectedData);
-
-                state = await transaction.GetStateAsync();
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Text()
-            {
-                Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
-            }
-
-            [Fact]
-            public void It_Should_Not_Deliver_Expected_Text()
-            {
-                resultText.ShouldBeNull();
-            }
-
-            [Fact]
-            public void It_Should_Deliver_Data()
-            {
-                Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
-            }
-
-            [Fact]
-            public void It_Should_Not_Deliver_Expected_Data()
-            {
-                resultData.ShouldBeNull();
-            }
-
-            [Fact]
-            public void State_Should_Have_Poison_Single()
-            {
-                state.Poison.Count.ShouldEqual(1);
-            }
-
-            [Fact]
-            public void State_Should_Have_Queue_Empty()
-            {
                 state.Queue.ShouldBeEmpty();
             }
+        }
 
-            [Fact]
-            public void State_Should_Have_Transactions_Empty()
+        [Fact]
+        public async Task It_Should_Empty_Poison()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
             {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
+                state.Poison.ShouldBeEmpty();
+            }
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Transactions()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
+            {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
                 state.Transactions.ShouldBeEmpty();
             }
         }
+    }
 
-        /* TODO Retry
-        public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+    public class When_Sending_Explosive_Message_One_To_Many : BaseOneToManyTest
+    {
+        protected string resultText;
+        protected string expectedText = "text";
+
+        protected byte[] resultData;
+        protected byte[] expectedData = new byte[1024];
+
+        public override void Prepare()
         {
-            protected TimeSpan wait = TimeSpan.FromSeconds(60);
+            base.Prepare();
 
-            protected string resultText;
-            protected Stopwatch timerText;
-            protected string expectedText = "text";
+            Processor!.Setup(x => x.Process(It.IsAny<string>()))
+                      .Callback<string>(x => resultText = x);
 
-            protected byte[] resultData;
-            protected Stopwatch timerData;
-            protected byte[] expectedData = new byte[1024];
+            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
+                      .Callback<byte[]>(x => resultData = x);
 
-            public override void Prepare()
+            for (var i = 0; i < 1024; i++)
             {
-                base.Prepare();
-
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Callback<string>(x =>
-                          {
-                              timerText ??= Stopwatch.StartNew();
-
-                              if (timerText.Elapsed < wait)
-                              {
-                                  throw new Exception();
-                              }
-                              else
-                              {
-                                  resultText = x;
-                              }
-                          });
-
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Callback<byte[]>(x =>
-                          {
-                              timerData ??= Stopwatch.StartNew();
-
-                              if (timerData.Elapsed < wait)
-                              {
-                                  throw new Exception();
-                              }
-                              else
-                              {
-                                  resultData = x;
-                              }
-                          });
-
-                for (var i = 0; i < 1024; i++)
-                {
-                    expectedData[i] = Convert.ToByte(i % 2);
-                }
+                expectedData[i] = Convert.ToByte(i % 2);
             }
+        }
 
-            public override async Task Act()
+        public override async Task Act()
+        {
+            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
+
+            await grain.ExplosiveAsync(expectedText, expectedData);
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Text()
+        {
+            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(20));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Text()
+        {
+            expectedText.ShouldEqual(resultText);
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Data()
+        {
+            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(20));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Data()
+        {
+            expectedData.ShouldEqual(resultData);
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Queue()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
+            {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
+                state.Queue.ShouldBeEmpty();
+            }
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Poison()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
+            {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
+                state.Poison.ShouldBeEmpty();
+            }
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Transactions()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
+            {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
+                state.Transactions.ShouldBeEmpty();
+            }
+        }
+    }
+
+    public class When_Sending_Broadcast_Message_One_To_Many : BaseOneToManyTest
+    {
+        protected string resultText;
+        protected string expectedText = "text";
+
+        protected byte[] resultData;
+        protected byte[] expectedData = new byte[1024];
+
+        public override void Prepare()
+        {
+            base.Prepare();
+
+            Processor!.Setup(x => x.Process(It.IsAny<string>()))
+                      .Callback<string>(x => resultText = x);
+
+            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
+                      .Callback<byte[]>(x => resultData = x);
+
+            for (var i = 0; i < 1024; i++)
+            {
+                expectedData[i] = Convert.ToByte(i % 2);
+            }
+        }
+
+        public override async Task Act()
+        {
+            for (var i = 0; i < 10; i++)
             {
                 var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-                var transaction = Subject.GetGrain<ITransactionGrain>(nameof(BroadcastMessage));
 
                 await grain.BroadcastAsync(expectedText, expectedData);
-
-                var state = await transaction.GetStateAsync();
             }
+        }
 
-            [Fact]
-            public void It_Should_Deliver_Text()
+        [Fact]
+        public void It_Should_Deliver_Text()
+        {
+            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Text()
+        {
+            expectedText.ShouldEqual(resultText);
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Data()
+        {
+            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Data()
+        {
+            expectedData.ShouldEqual(resultData);
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Queue()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
             {
-                Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
-            }
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
 
-            [Fact]
-            public void It_Should_Deliver_Expected_Text()
-            {
-                expectedText.ShouldEqual(resultText);
+                state.Queue.ShouldBeEmpty();
             }
+        }
 
-            [Fact]
-            public void It_Should_Deliver_Data()
+        [Fact]
+        public async Task It_Should_Empty_Poison()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
             {
-                Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
-            }
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
 
-            [Fact]
-            public void It_Should_Deliver_Expected_Data()
-            {
-                expectedData.ShouldEqual(resultData);
+                state.Poison.ShouldBeEmpty();
             }
-        }*/
+        }
+
+        [Fact]
+        public async Task It_Should_Empty_Transactions()
+        {
+            for (var i = 0; i < settings.Value.QueueCount; i++)
+            {
+                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+                var state = await grain.GetStateAsync();
+
+                state.Transactions.ShouldBeEmpty();
+            }
+        }
     }
+
+    public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+    {
+        protected TransactionGrainState state;
+
+        protected string resultText;
+        protected string expectedText = "text";
+
+        protected byte[] resultData;
+        protected byte[] expectedData = new byte[1024];
+
+        public override void Prepare()
+        {
+            base.Prepare();
+
+            Processor!.Setup(x => x.Process(It.IsAny<string>()))
+                      .Throws<Exception>();
+
+            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
+                      .Throws<Exception>();
+
+            for (var i = 0; i < 1024; i++)
+            {
+                expectedData[i] = Convert.ToByte(i % 2);
+            }
+        }
+
+        public override async Task Act()
+        {
+            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            var transaction = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-0");
+
+            await grain.BroadcastAsync(expectedText, expectedData);
+
+            state = await transaction.GetStateAsync();
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Text()
+        {
+            Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
+        }
+
+        [Fact]
+        public void It_Should_Not_Deliver_Expected_Text()
+        {
+            resultText.ShouldBeNull();
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Data()
+        {
+            Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
+        }
+
+        [Fact]
+        public void It_Should_Not_Deliver_Expected_Data()
+        {
+            resultData.ShouldBeNull();
+        }
+
+        [Fact]
+        public void State_Should_Have_Poison_Single()
+        {
+            state.Poison.Count.ShouldEqual(1);
+        }
+
+        [Fact]
+        public void State_Should_Have_Queue_Empty()
+        {
+            state.Queue.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Transactions_Empty()
+        {
+            state.Transactions.ShouldBeEmpty();
+        }
+    }
+
+    /* TODO Retry
+    public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+    {
+        protected TimeSpan wait = TimeSpan.FromSeconds(60);
+
+        protected string resultText;
+        protected Stopwatch timerText;
+        protected string expectedText = "text";
+
+        protected byte[] resultData;
+        protected Stopwatch timerData;
+        protected byte[] expectedData = new byte[1024];
+
+        public override void Prepare()
+        {
+            base.Prepare();
+
+            Processor!.Setup(x => x.Process(It.IsAny<string>()))
+                      .Callback<string>(x =>
+                      {
+                          timerText ??= Stopwatch.StartNew();
+
+                          if (timerText.Elapsed < wait)
+                          {
+                              throw new Exception();
+                          }
+                          else
+                          {
+                              resultText = x;
+                          }
+                      });
+
+            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
+                      .Callback<byte[]>(x =>
+                      {
+                          timerData ??= Stopwatch.StartNew();
+
+                          if (timerData.Elapsed < wait)
+                          {
+                              throw new Exception();
+                          }
+                          else
+                          {
+                              resultData = x;
+                          }
+                      });
+
+            for (var i = 0; i < 1024; i++)
+            {
+                expectedData[i] = Convert.ToByte(i % 2);
+            }
+        }
+
+        public override async Task Act()
+        {
+            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            var transaction = Subject.GetGrain<ITransactionGrain>(nameof(BroadcastMessage));
+
+            await grain.BroadcastAsync(expectedText, expectedData);
+
+            var state = await transaction.GetStateAsync();
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Text()
+        {
+            Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Text()
+        {
+            expectedText.ShouldEqual(resultText);
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Data()
+        {
+            Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
+        }
+
+        [Fact]
+        public void It_Should_Deliver_Expected_Data()
+        {
+            expectedData.ShouldEqual(resultData);
+        }
+    }*/
 }

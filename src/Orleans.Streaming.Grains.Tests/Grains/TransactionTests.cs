@@ -13,229 +13,228 @@ using Orleans.Streaming.Grains.Test;
 using Should;
 using Xunit;
 
-namespace Orleans.Streaming.Grains.Tests.Grains
+namespace Orleans.Streaming.Grains.Tests.Grains;
+
+public class TransactionTests
 {
-    public class TransactionTests
+    public class Config : BaseGrainTestConfig
     {
-        public class Config : BaseGrainTestConfig
+        public override void Configure(IServiceCollection services)
         {
-            public override void Configure(IServiceCollection services)
-            {
-            }
+        }
+    }
+
+    public abstract class BaseTransactionTest : BaseGrainTest<Config>
+    {
+        protected IClusterClient client;
+        protected ITransactionService service;
+        protected IOptions<GrainsOptions> settings;
+
+        protected TransactionGrainState state;
+
+        public override void Prepare()
+        {
+            client = Container.GetService<IClusterClient>();
+            service = Container.GetService<ITransactionService>();
+            settings = Container.GetService<IOptions<GrainsOptions>>();
+        }
+    }
+
+    public class WhenPoppingEmpty : BaseTransactionTest
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results;
+
+        public override async Task Act()
+        {
+            results = await service.PopAsync<int>("1", 1);
         }
 
-        public abstract class BaseTransactionTest : BaseGrainTest<Config>
+        [Fact]
+        public void It_Should_Return_Null()
         {
-            protected IClusterClient client;
-            protected ITransactionService service;
-            protected IOptions<GrainsOptions> settings;
+            results.ShouldBeEmpty();
+        }
+    }
 
-            protected TransactionGrainState state;
+    public abstract class BaseWhenPoppingSingle : BaseTransactionTest
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results;
 
-            public override void Prepare()
-            {
-                client = Container.GetService<IClusterClient>();
-                service = Container.GetService<ITransactionService>();
-                settings = Container.GetService<IOptions<GrainsOptions>>();
-            }
+        public override void Prepare()
+        {
+            base.Prepare();
         }
 
-        public class WhenPoppingEmpty : BaseTransactionTest
+        [Fact]
+        public void It_Should_Return()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results;
-
-            public override async Task Act()
-            {
-                results = await service.PopAsync<int>("1", 1);
-            }
-
-            [Fact]
-            public void It_Should_Return_Null()
-            {
-                results.ShouldBeEmpty();
-            }
+            results.ShouldNotBeEmpty();
         }
 
-        public abstract class BaseWhenPoppingSingle : BaseTransactionTest
+        [Fact]
+        public void It_Should_Return_Item()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results;
-
-            public override void Prepare()
-            {
-                base.Prepare();
-            }
-
-            [Fact]
-            public void It_Should_Return()
-            {
-                results.ShouldNotBeEmpty();
-            }
-
-            [Fact]
-            public void It_Should_Return_Item()
-            {
-                results.First().Item.Value.ShouldEqual(100);
-            }
-
-            [Fact]
-            public void It_Should_Return_Id()
-            {
-                results.First().Id.ShouldNotEqual(Guid.Empty);
-            }
+            results.First().Item.Value.ShouldEqual(100);
         }
 
-        public class WhenPoppingSingle : BaseWhenPoppingSingle
+        [Fact]
+        public void It_Should_Return_Id()
         {
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+            results.First().Id.ShouldNotEqual(Guid.Empty);
+        }
+    }
 
-                results = await service.PopAsync<int>("1", 1);
+    public class WhenPoppingSingle : BaseWhenPoppingSingle
+    {
+        public override async Task Act()
+        {
+            await service.PostAsync(new Immutable<int>(100), false, "1");
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+            results = await service.PopAsync<int>("1", 1);
 
-                state = await transaction.GetStateAsync();
-            }
+            var transaction = client.GetGrain<ITransactionGrain>("1");
 
-            [Fact]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Transactions_Single()
-            {
-                state.Transactions.Count.ShouldEqual(1);
-            }
+            state = await transaction.GetStateAsync();
         }
 
-        public class WhenPoppingSingleTimeout : BaseWhenPoppingSingle
+        [Fact]
+        public void State_Should_Have_Poison_Empty()
         {
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
-
-                results = await service.PopAsync<int>("1", 1);
-
-                var transaction = client.GetGrain<ITransactionGrain>("1");
-
-                await Task.Delay(TimeSpan.FromSeconds(2));
-
-                state = await transaction.GetStateAsync();
-            }
-
-            [Fact]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Queue_One()
-            {
-                state.Queue.Count.ShouldEqual(1);
-            }
-
-            [Fact]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.Count.ShouldEqual(1);
-            }
+            state.Poison.ShouldBeEmpty();
         }
 
-        public class WhenPoppingSingleAfterComplete : BaseWhenPoppingSingle
+        [Fact]
+        public void State_Should_Have_Queue_Empty()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results2;
-
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
-
-                results = await service.PopAsync<int>("1", 1);
-
-                await service.CompleteAsync<int>(results.First().Id, true, "1");
-
-                results2 = await service.PopAsync<int>("1", 1);
-
-                var transaction = client.GetGrain<ITransactionGrain>("1");
-
-                state = await transaction.GetStateAsync();
-            }
-
-            [Fact]
-            public void It_Should_Return_Second_Null()
-            {
-                results2.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
-
-            [Fact]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.ShouldBeEmpty();
-            }
+            state.Queue.ShouldBeEmpty();
         }
 
-        public class WhenPoppingSingleAfterCompletePoison : BaseWhenPoppingSingle
+        [Fact]
+        public void State_Should_Have_Transactions_Single()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results2;
+            state.Transactions.Count.ShouldEqual(1);
+        }
+    }
 
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+    public class WhenPoppingSingleTimeout : BaseWhenPoppingSingle
+    {
+        public override async Task Act()
+        {
+            await service.PostAsync(new Immutable<int>(100), false, "1");
 
-                results = await service.PopAsync<int>("1", 1);
+            results = await service.PopAsync<int>("1", 1);
 
-                await service.CompleteAsync<int>(results.First().Id, false, "1");
+            var transaction = client.GetGrain<ITransactionGrain>("1");
 
-                results2 = await service.PopAsync<int>("1", 1);
+            await Task.Delay(TimeSpan.FromSeconds(2));
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+            state = await transaction.GetStateAsync();
+        }
 
-                state = await transaction.GetStateAsync();
-            }
+        [Fact]
+        public void State_Should_Have_Poison_Empty()
+        {
+            state.Poison.ShouldBeEmpty();
+        }
 
-            [Fact]
-            public void It_Should_Return_Second_Null()
-            {
-                results2.ShouldBeEmpty();
-            }
+        [Fact]
+        public void State_Should_Have_Queue_One()
+        {
+            state.Queue.Count.ShouldEqual(1);
+        }
 
-            [Fact]
-            public void State_Should_Have_Poison_Single()
-            {
-                state.Poison.Count.ShouldEqual(1);
-            }
+        [Fact]
+        public void State_Should_Have_Transactions_Empty()
+        {
+            state.Transactions.Count.ShouldEqual(1);
+        }
+    }
 
-            [Fact]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
+    public class WhenPoppingSingleAfterComplete : BaseWhenPoppingSingle
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results2;
 
-            [Fact]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.ShouldBeEmpty();
-            }
+        public override async Task Act()
+        {
+            await service.PostAsync(new Immutable<int>(100), false, "1");
+
+            results = await service.PopAsync<int>("1", 1);
+
+            await service.CompleteAsync<int>(results.First().Id, true, "1");
+
+            results2 = await service.PopAsync<int>("1", 1);
+
+            var transaction = client.GetGrain<ITransactionGrain>("1");
+
+            state = await transaction.GetStateAsync();
+        }
+
+        [Fact]
+        public void It_Should_Return_Second_Null()
+        {
+            results2.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Poison_Empty()
+        {
+            state.Poison.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Queue_Empty()
+        {
+            state.Queue.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Transactions_Empty()
+        {
+            state.Transactions.ShouldBeEmpty();
+        }
+    }
+
+    public class WhenPoppingSingleAfterCompletePoison : BaseWhenPoppingSingle
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results2;
+
+        public override async Task Act()
+        {
+            await service.PostAsync(new Immutable<int>(100), false, "1");
+
+            results = await service.PopAsync<int>("1", 1);
+
+            await service.CompleteAsync<int>(results.First().Id, false, "1");
+
+            results2 = await service.PopAsync<int>("1", 1);
+
+            var transaction = client.GetGrain<ITransactionGrain>("1");
+
+            state = await transaction.GetStateAsync();
+        }
+
+        [Fact]
+        public void It_Should_Return_Second_Null()
+        {
+            results2.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Poison_Single()
+        {
+            state.Poison.Count.ShouldEqual(1);
+        }
+
+        [Fact]
+        public void State_Should_Have_Queue_Empty()
+        {
+            state.Queue.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void State_Should_Have_Transactions_Empty()
+        {
+            state.Transactions.ShouldBeEmpty();
         }
     }
 }

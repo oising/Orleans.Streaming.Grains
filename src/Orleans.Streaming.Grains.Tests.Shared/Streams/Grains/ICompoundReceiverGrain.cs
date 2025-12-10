@@ -7,9 +7,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Orleans.Streaming.Grains.Tests.Streams.Grains
+namespace Orleans.Streaming.Grains.Tests.Streams.Grains;
+
+public interface ICompoundReceiverGrain : IGrainWithGuidKey
 {
-    public interface ICompoundReceiverGrain : IGrainWithGuidKey
-    {
-    }
 }

@@ -8,14 +8,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Orleans.Concurrency;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionService
 {
-    public interface ITransactionService
-    {
-        Task<List<(Guid Id, Immutable<T> Item)>> PopAsync<T>(string queue, int maxCount);
+    Task<List<(Guid Id, Immutable<T> Item)>> PopAsync<T>(string queue, int maxCount);
 
-        Task PostAsync<T>(Immutable<T> message, bool wait, string queue);
+    Task PostAsync<T>(Immutable<T> message, bool wait, string queue);
 
-        Task CompleteAsync<T>(Guid id, bool success, string queue);
-    }
+    Task CompleteAsync<T>(Guid id, bool success, string queue);
 }

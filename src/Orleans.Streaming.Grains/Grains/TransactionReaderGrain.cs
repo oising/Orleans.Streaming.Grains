@@ -12,26 +12,25 @@ using Orleans.Concurrency;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.State;
 
-namespace Orleans.Streaming.Grains.Grains
+namespace Orleans.Streaming.Grains.Grains;
+
+public class TransactionReaderGrain<T> : Grain, ITransactionReaderGrain<T>
 {
-    public class TransactionReaderGrain<T> : Grain, ITransactionReaderGrain<T>
+    public async Task<Immutable<List<(Guid Id, Immutable<T> Item)>>> GetAsync(List<Guid> ids)
     {
-        public async Task<Immutable<List<(Guid Id, Immutable<T> Item)>>> GetAsync(List<Guid> ids)
+        var results = new List<(Guid Id, Immutable<T> Item)>();
+
+        foreach (var id in ids)
         {
-            var results = new List<(Guid Id, Immutable<T> Item)>();
+            var itemGrain = GrainFactory.GetGrain<ITransactionItemGrain<T>>(id);
+            var item = await itemGrain.GetAsync();
 
-            foreach (var id in ids)
+            if (item.Value != null)
             {
-                var itemGrain = GrainFactory.GetGrain<ITransactionItemGrain<T>>(id);
-                var item = await itemGrain.GetAsync();
-
-                if (item.Value != null)
-                {
-                    results.Add((id, item));
-                }
+                results.Add((id, item));
             }
-
-            return new Immutable<List<(Guid Id, Immutable<T> Item)>>(results);
         }
+
+        return new Immutable<List<(Guid Id, Immutable<T> Item)>>(results);
     }
 }

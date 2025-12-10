@@ -5,12 +5,11 @@
 using Orleans;
 using Orleans.Concurrency;
 
-namespace Orleans.Streaming.Grains.State
+namespace Orleans.Streaming.Grains.State;
+
+[GenerateSerializer]
+public class TransactionItemGrainState<T>
 {
-    [GenerateSerializer]
-    public class TransactionItemGrainState<T>
-    {
-        [Id(0)]
-        public Immutable<T> Item { get; set; }
-    }
+    [Id(0)]
+    public Immutable<T> Item { get; set; }
 }
