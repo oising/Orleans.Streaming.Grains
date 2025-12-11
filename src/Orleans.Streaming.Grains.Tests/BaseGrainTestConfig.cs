@@ -24,20 +24,13 @@ using Serilog;
 
 namespace Orleans.Streaming.Grains.Test;
 
-public abstract class BaseGrainTestConfig : ISiloConfigurator, IClientBuilderConfigurator
+public abstract class BaseGrainTestConfig(bool fireAndForget = false) : ISiloConfigurator, IClientBuilderConfigurator
 {
-    private readonly bool _fireAndForget;
-
-    protected BaseGrainTestConfig(bool fireAndForget = false)
-    {
-        _fireAndForget = fireAndForget;
-    }
-
     public abstract void Configure(IServiceCollection services);
 
     public void Configure(ISiloBuilder siloBuilder)
     {
-        if (_fireAndForget)
+        if (fireAndForget)
         {
             siloBuilder.ConfigureServices(Configure)
                        .ConfigureServices(ConfigureInner)

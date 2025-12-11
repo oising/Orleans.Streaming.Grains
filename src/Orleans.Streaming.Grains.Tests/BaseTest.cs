@@ -10,10 +10,7 @@ namespace Orleans.Streaming.Grains.Test;
 public abstract class BaseTest<T> : IAsyncLifetime
     where T : class
 {
-    public BaseTest()
-    {
-        Services = new ServiceCollection();
-    }
+    public BaseTest() => Services = new ServiceCollection();
 
     public T Subject { get; private set; }
 

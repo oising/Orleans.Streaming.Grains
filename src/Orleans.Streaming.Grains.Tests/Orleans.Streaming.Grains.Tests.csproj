@@ -27,6 +27,10 @@
     <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" />
     <PackageReference Include="Microsoft.Orleans.TestingHost" Version="9.2.1" />
     <PackageReference Include="Microsoft.Orleans.BroadcastChannel" Version="9.2.1" />
+    <PackageReference Include="xunit.analyzers" Version="1.26.0" >
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Orleans.Streaming.Grains\Orleans.Streaming.Grains.csproj" />

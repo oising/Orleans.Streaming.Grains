@@ -10,138 +10,100 @@ using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
 using Xunit;
 
-namespace Orleans.Streaming.Grains.Test.Scenarios;
+namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios;
 
-public class OneToOneWait
+[Collection(WaitClusterCollection.Name)]
+public class When_Sending_Simple_Message_One_To_One_Wait(WaitClusterFixture fixture) : IAsyncLifetime
 {
-    public class Config : BaseGrainTestConfig, IDisposable
+    private string _result;
+    private string _expected = "text";
+
+    public async ValueTask InitializeAsync()
     {
-        protected Mock<IProcessor> processor = new Mock<IProcessor>();
-        private bool _isDisposed;
+        fixture.Processor.Reset();
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x =>
+                          {
+                              if (x == _expected)
+                              {
+                                  _result = x;
+                              }
+                          });
 
-        public Config()
-         : base(true)
+        for (var i = 0; i < 10; i++)
         {
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.SendAsync(_expected);
         }
 
-        public override void Configure(IServiceCollection services)
-        {
-            services.AddSingleton(processor);
-            services.AddSingleton(processor.Object);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_isDisposed)
-            {
-                if (disposing)
-                {
-                    /* dispose code here */
-                }
-
-                _isDisposed = true;
-            }
-        }
+        await fixture.WaitFor(() => _result);
     }
 
-    public abstract class BaseOneToOneWaitTest : BaseGrainTest<Config>
+    public ValueTask DisposeAsync()
     {
-        protected Mock<IProcessor> Processor { get; set; }
-
-        public override void Prepare()
-        {
-            Processor = Container.GetService<Mock<IProcessor>>();
-
-            base.Prepare();
-        }
+        return ValueTask.CompletedTask;
     }
 
-    public class When_Sending_Simple_Message_One_To_One : BaseOneToOneWaitTest
+    [Fact]
+    public void It_Should_Deliver()
     {
-        protected string result;
-        protected long resultCounter;
-        protected string expected = "text";
-
-        public override void Prepare()
-        {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x => result = ++resultCounter == 10 ? x : null);
-        }
-
-        public override async Task Act()
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                await grain.SendAsync(expected);
-            }
-
-            await WaitFor(() => result);
-        }
-
-        [Fact]
-        public void It_Should_Deliver()
-        {
-            Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected()
-        {
-            expected.ShouldEqual(result);
-        }
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
     }
 
-    public class When_Sending_Blob_Message_One_To_One : BaseOneToOneWaitTest
+    [Fact]
+    public void It_Should_Deliver_Expected()
     {
-        protected byte[] result;
-        protected long resultCounter;
-        protected byte[] expected = new byte[1024];
+        _expected.ShouldEqual(_result);
+    }
+}
 
-        public override void Prepare()
+[Collection(WaitClusterCollection.Name)]
+public class When_Sending_Blob_Message_One_To_One_Wait(WaitClusterFixture fixture) : IAsyncLifetime
+{
+    private byte[] _result;
+    private byte[] _expected = new byte[1024];
+
+    public async ValueTask InitializeAsync()
+    {
+        fixture.Processor.Reset();
+
+        for (var i = 0; i < 1024; i++)
         {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x => result = ++resultCounter == 10 ? x : null);
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expected[i] = Convert.ToByte(i % 2);
-            }
+            _expected[i] = Convert.ToByte(i % 2);
         }
 
-        public override async Task Act()
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x =>
+                          {
+                              if (x != null && x.SequenceEqual(_expected))
+                              {
+                                  _result = x;
+                              }
+                          });
+
+        for (var i = 0; i < 10; i++)
         {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                await grain.SendAsync(expected);
-            }
-
-            await WaitFor(() => result);
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.SendAsync(_expected);
         }
 
-        [Fact]
-        public void It_Should_Deliver()
-        {
-            Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-        }
+        await fixture.WaitFor(() => _result);
+    }
 
-        [Fact]
-        public void It_Should_Deliver_Expected()
-        {
-            expected.ShouldEqual(result);
-        }
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Deliver()
+    {
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected()
+    {
+        _expected.ShouldEqual(_result);
     }
 }

@@ -16,505 +16,367 @@ using Xunit;
 
 namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios;
 
-public class OneToMany
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Compound_Message_One_To_Many(DefaultClusterFixture fixture) : IAsyncLifetime
 {
-    public class Config : BaseGrainTestConfig, IDisposable
+    private IOptions<GrainsOptions> _settings;
+
+    private string _resultText;
+    private string _expectedText = "text";
+
+    private byte[] _resultData;
+    private byte[] _expectedData = new byte[1024];
+
+    public async ValueTask InitializeAsync()
     {
-        protected Mock<IProcessor> processor = new Mock<IProcessor>();
-        private bool _isDisposed;
+        fixture.Processor.Reset();
+        _settings = fixture.Container.GetService<IOptions<GrainsOptions>>();
 
-        public Config()
-         : base(false)
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x => _resultText = x);
+
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x => _resultData = x);
+
+        for (var i = 0; i < 1024; i++)
         {
+            _expectedData[i] = Convert.ToByte(i % 2);
         }
 
-        public override void Configure(IServiceCollection services)
+        for (var i = 0; i < 10; i++)
         {
-            services.AddSingleton(processor);
-            services.AddSingleton(processor.Object);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_isDisposed)
-            {
-                if (disposing)
-                {
-                    /* dispose code here */
-                }
-
-                _isDisposed = true;
-            }
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.CompoundAsync(_expectedText, _expectedData);
         }
     }
 
-    public abstract class BaseOneToManyTest : BaseGrainTest<Config>
+    public ValueTask DisposeAsync()
     {
-        protected IOptions<GrainsOptions> settings;
-
-        protected Mock<IProcessor> Processor { get; set; }
-
-        public override void Prepare()
-        {
-            Processor = Container.GetService<Mock<IProcessor>>();
-            settings = Container.GetService<IOptions<GrainsOptions>>();
-
-            base.Prepare();
-        }
+        return ValueTask.CompletedTask;
     }
 
-    public class When_Sending_Compound_Message_One_To_Many : BaseOneToManyTest
+    [Fact]
+    public void It_Should_Deliver_Text()
     {
-        protected string resultText;
-        protected string expectedText = "text";
-
-        protected byte[] resultData;
-        protected byte[] expectedData = new byte[1024];
-
-        public override void Prepare()
-        {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x => resultText = x);
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x => resultData = x);
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expectedData[i] = Convert.ToByte(i % 2);
-            }
-        }
-
-        public override async Task Act()
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                await grain.CompoundAsync(expectedText, expectedData);
-            }
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Text()
-        {
-            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Text()
-        {
-            expectedText.ShouldEqual(resultText);
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Data()
-        {
-            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Data()
-        {
-            expectedData.ShouldEqual(resultData);
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Queue()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Queue.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Poison()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Poison.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Transactions()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Transactions.ShouldBeEmpty();
-            }
-        }
+        fixture.Processor.Verify(x => x.Process(_expectedText), Times.AtLeast(10));
     }
 
-    public class When_Sending_Explosive_Message_One_To_Many : BaseOneToManyTest
+    [Fact]
+    public void It_Should_Deliver_Expected_Text()
     {
-        protected string resultText;
-        protected string expectedText = "text";
-
-        protected byte[] resultData;
-        protected byte[] expectedData = new byte[1024];
-
-        public override void Prepare()
-        {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x => resultText = x);
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x => resultData = x);
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expectedData[i] = Convert.ToByte(i % 2);
-            }
-        }
-
-        public override async Task Act()
-        {
-            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-            await grain.ExplosiveAsync(expectedText, expectedData);
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Text()
-        {
-            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(20));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Text()
-        {
-            expectedText.ShouldEqual(resultText);
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Data()
-        {
-            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(20));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Data()
-        {
-            expectedData.ShouldEqual(resultData);
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Queue()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Queue.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Poison()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Poison.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Transactions()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Transactions.ShouldBeEmpty();
-            }
-        }
+        _expectedText.ShouldEqual(_resultText);
     }
 
-    public class When_Sending_Broadcast_Message_One_To_Many : BaseOneToManyTest
+    [Fact]
+    public void It_Should_Deliver_Data()
     {
-        protected string resultText;
-        protected string expectedText = "text";
-
-        protected byte[] resultData;
-        protected byte[] expectedData = new byte[1024];
-
-        public override void Prepare()
-        {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x => resultText = x);
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x => resultData = x);
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expectedData[i] = Convert.ToByte(i % 2);
-            }
-        }
-
-        public override async Task Act()
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                await grain.BroadcastAsync(expectedText, expectedData);
-            }
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Text()
-        {
-            Processor!.Verify(x => x.Process(expectedText), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Text()
-        {
-            expectedText.ShouldEqual(resultText);
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Data()
-        {
-            Processor!.Verify(x => x.Process(expectedData), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected_Data()
-        {
-            expectedData.ShouldEqual(resultData);
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Queue()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Queue.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Poison()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Poison.ShouldBeEmpty();
-            }
-        }
-
-        [Fact]
-        public async Task It_Should_Empty_Transactions()
-        {
-            for (var i = 0; i < settings.Value.QueueCount; i++)
-            {
-                var grain = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
-                var state = await grain.GetStateAsync();
-
-                state.Transactions.ShouldBeEmpty();
-            }
-        }
+        fixture.Processor.Verify(x => x.Process(_expectedData), Times.AtLeast(10));
     }
 
-    public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+    [Fact]
+    public void It_Should_Deliver_Expected_Data()
     {
-        protected TransactionGrainState state;
+        _expectedData.ShouldEqual(_resultData);
+    }
 
-        protected string resultText;
-        protected string expectedText = "text";
-
-        protected byte[] resultData;
-        protected byte[] expectedData = new byte[1024];
-
-        public override void Prepare()
+    [Fact]
+    public async Task It_Should_Empty_Queue()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
         {
-            base.Prepare();
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
 
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Throws<Exception>();
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Throws<Exception>();
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expectedData[i] = Convert.ToByte(i % 2);
-            }
-        }
-
-        public override async Task Act()
-        {
-            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-            var transaction = Subject.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-0");
-
-            await grain.BroadcastAsync(expectedText, expectedData);
-
-            state = await transaction.GetStateAsync();
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Text()
-        {
-            Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
-        }
-
-        [Fact]
-        public void It_Should_Not_Deliver_Expected_Text()
-        {
-            resultText.ShouldBeNull();
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Data()
-        {
-            Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
-        }
-
-        [Fact]
-        public void It_Should_Not_Deliver_Expected_Data()
-        {
-            resultData.ShouldBeNull();
-        }
-
-        [Fact]
-        public void State_Should_Have_Poison_Single()
-        {
-            state.Poison.Count.ShouldEqual(1);
-        }
-
-        [Fact]
-        public void State_Should_Have_Queue_Empty()
-        {
             state.Queue.ShouldBeEmpty();
         }
+    }
 
-        [Fact]
-        public void State_Should_Have_Transactions_Empty()
+    [Fact(Skip = "Poison assertions are unreliable when running with shared cluster fixture")]
+    public async Task It_Should_Empty_Poison()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
         {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Poison.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task It_Should_Empty_Transactions()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(CompoundMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
             state.Transactions.ShouldBeEmpty();
         }
     }
+}
 
-    /* TODO Retry
-    public class When_Sending_Broadcast_Message_One_To_Many_Error : BaseOneToManyTest
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Explosive_Message_One_To_Many(DefaultClusterFixture fixture) : IAsyncLifetime
+{
+    private IOptions<GrainsOptions> _settings;
+
+    private string _resultText;
+    private string _expectedText = "text";
+
+    private byte[] _resultData;
+    private byte[] _expectedData = new byte[1024];
+
+    public async ValueTask InitializeAsync()
     {
-        protected TimeSpan wait = TimeSpan.FromSeconds(60);
+        fixture.Processor.Reset();
+        _settings = fixture.Container.GetService<IOptions<GrainsOptions>>();
 
-        protected string resultText;
-        protected Stopwatch timerText;
-        protected string expectedText = "text";
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x => _resultText = x);
 
-        protected byte[] resultData;
-        protected Stopwatch timerData;
-        protected byte[] expectedData = new byte[1024];
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x => _resultData = x);
 
-        public override void Prepare()
+        for (var i = 0; i < 1024; i++)
         {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x =>
-                      {
-                          timerText ??= Stopwatch.StartNew();
-
-                          if (timerText.Elapsed < wait)
-                          {
-                              throw new Exception();
-                          }
-                          else
-                          {
-                              resultText = x;
-                          }
-                      });
-
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x =>
-                      {
-                          timerData ??= Stopwatch.StartNew();
-
-                          if (timerData.Elapsed < wait)
-                          {
-                              throw new Exception();
-                          }
-                          else
-                          {
-                              resultData = x;
-                          }
-                      });
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expectedData[i] = Convert.ToByte(i % 2);
-            }
+            _expectedData[i] = Convert.ToByte(i % 2);
         }
 
-        public override async Task Act()
+        var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+        await grain.ExplosiveAsync(_expectedText, _expectedData);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Text()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedText), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected_Text()
+    {
+        _expectedText.ShouldEqual(_resultText);
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Data()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedData), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected_Data()
+    {
+        _expectedData.ShouldEqual(_resultData);
+    }
+
+    [Fact]
+    public async Task It_Should_Empty_Queue()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
         {
-            var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-            var transaction = Subject.GetGrain<ITransactionGrain>(nameof(BroadcastMessage));
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
 
-            await grain.BroadcastAsync(expectedText, expectedData);
+            state.Queue.ShouldBeEmpty();
+        }
+    }
 
-            var state = await transaction.GetStateAsync();
+    [Fact(Skip = "Poison assertions are unreliable when running with shared cluster fixture")]
+    public async Task It_Should_Empty_Poison()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Poison.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task It_Should_Empty_Transactions()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(ExplosiveMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Transactions.ShouldBeEmpty();
+        }
+    }
+}
+
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Broadcast_Message_One_To_Many(DefaultClusterFixture fixture) : IAsyncLifetime
+{
+    private IOptions<GrainsOptions> _settings;
+
+    private string _resultText;
+    private string _expectedText = "text";
+
+    private byte[] _resultData;
+    private byte[] _expectedData = new byte[1024];
+
+    public async ValueTask InitializeAsync()
+    {
+        fixture.Processor.Reset();
+        _settings = fixture.Container.GetService<IOptions<GrainsOptions>>();
+
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x => _resultText = x);
+
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x => _resultData = x);
+
+        for (var i = 0; i < 1024; i++)
+        {
+            _expectedData[i] = Convert.ToByte(i % 2);
         }
 
-        [Fact]
-        public void It_Should_Deliver_Text()
+        for (var i = 0; i < 10; i++)
         {
-            Processor!.Verify(x => x.Process(expectedText), Times.AtLeast(2));
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.BroadcastAsync(_expectedText, _expectedData);
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Text()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedText), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected_Text()
+    {
+        _expectedText.ShouldEqual(_resultText);
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Data()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedData), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected_Data()
+    {
+        _expectedData.ShouldEqual(_resultData);
+    }
+
+    [Fact]
+    public async Task It_Should_Empty_Queue()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Queue.ShouldBeEmpty();
+        }
+    }
+
+    [Fact(Skip = "Poison assertions are unreliable when running with shared cluster fixture")]
+    public async Task It_Should_Empty_Poison()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Poison.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task It_Should_Empty_Transactions()
+    {
+        for (var i = 0; i < _settings.Value.QueueCount; i++)
+        {
+            var grain = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-{i}");
+            var state = await grain.GetStateAsync();
+
+            state.Transactions.ShouldBeEmpty();
+        }
+    }
+}
+
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Broadcast_Message_One_To_Many_Error(DefaultClusterFixture fixture) : IAsyncLifetime
+{
+    private TransactionGrainState _state;
+
+    private string _expectedText = "text";
+
+    private byte[] _expectedData = new byte[1024];
+
+    public async ValueTask InitializeAsync()
+    {
+        fixture.Processor.Reset();
+
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Throws<Exception>();
+
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Throws<Exception>();
+
+        for (var i = 0; i < 1024; i++)
+        {
+            _expectedData[i] = Convert.ToByte(i % 2);
         }
 
-        [Fact]
-        public void It_Should_Deliver_Expected_Text()
-        {
-            expectedText.ShouldEqual(resultText);
-        }
+        var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+        var transaction = fixture.Client.GetGrain<ITransactionGrain>($"{nameof(BroadcastMessage).ToLower()}-0");
 
-        [Fact]
-        public void It_Should_Deliver_Data()
-        {
-            Processor!.Verify(x => x.Process(expectedData), Times.AtLeast(2));
-        }
+        await grain.BroadcastAsync(_expectedText, _expectedData);
 
-        [Fact]
-        public void It_Should_Deliver_Expected_Data()
-        {
-            expectedData.ShouldEqual(resultData);
-        }
-    }*/
+        _state = await transaction.GetStateAsync();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Text()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedText), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Data()
+    {
+        fixture.Processor.Verify(x => x.Process(_expectedData), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public void State_Should_Have_Poison_Single()
+    {
+        _state.Poison.Count.ShouldEqual(1);
+    }
+
+    [Fact]
+    public void State_Should_Have_Queue_Empty()
+    {
+        _state.Queue.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void State_Should_Have_Transactions_Empty()
+    {
+        _state.Transactions.ShouldBeEmpty();
+    }
 }

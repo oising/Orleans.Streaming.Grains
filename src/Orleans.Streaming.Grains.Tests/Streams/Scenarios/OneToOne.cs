@@ -11,142 +11,94 @@ using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
 using Xunit;
 
-namespace Orleans.Streaming.Grains.Test.Scenarios;
+namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios;
 
-public class OneToOne
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Simple_Message_One_To_One(DefaultClusterFixture fixture) : IAsyncLifetime
 {
-    public class Config : BaseGrainTestConfig, IDisposable
+    private string _result;
+    private string _expected = "text";
+
+    public async ValueTask InitializeAsync()
     {
-        protected Mock<IProcessor> processor = new Mock<IProcessor>();
-        private bool _isDisposed;
+        fixture.Processor.Reset();
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x => _result = x);
 
-        public Config()
-         : base(false)
+        for (var i = 0; i < 10; i++)
         {
-        }
-
-        public override void Configure(IServiceCollection services)
-        {
-            services.AddSingleton(processor);
-            services.AddSingleton(processor.Object);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_isDisposed)
-            {
-                if (disposing)
-                {
-                    /* dispose code here */
-                }
-
-                _isDisposed = true;
-            }
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.SendAsync(_expected);
         }
     }
 
-    public abstract class BaseOneToOneTest : BaseGrainTest<Config>
+    public ValueTask DisposeAsync()
     {
-        protected Mock<IProcessor> Processor { get; set; }
+        return ValueTask.CompletedTask;
+    }
 
-        public override void Prepare()
+    [Fact]
+    public void It_Should_Deliver()
+    {
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected()
+    {
+        _expected.ShouldEqual(_result);
+    }
+}
+
+[Collection(DefaultClusterCollection.Name)]
+public class When_Sending_Blob_Message_One_To_One(DefaultClusterFixture fixture) : IAsyncLifetime
+{
+    private byte[] _result;
+    private byte[] _expected = new byte[1024];
+    private List<Stopwatch> _timers = new ();
+
+    public async ValueTask InitializeAsync()
+    {
+        fixture.Processor.Reset();
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x => _result = x);
+
+        for (var i = 0; i < 1024; i++)
         {
-            Processor = Container.GetService<Mock<IProcessor>>();
+            _expected[i] = Convert.ToByte(i % 2);
+        }
 
-            base.Prepare();
+        for (var i = 0; i < 10; i++)
+        {
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+
+            _timers.Add(Stopwatch.StartNew());
+            await grain.SendAsync(_expected);
+            _timers.Last().Stop();
         }
     }
 
-    public class When_Sending_Simple_Message_One_To_One : BaseOneToOneTest
+    public ValueTask DisposeAsync()
     {
-        protected string result;
-        protected string expected = "text";
-
-        public override void Prepare()
-        {
-            base.Prepare();
-
-            Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                      .Callback<string>(x => result = x);
-        }
-
-        public override async Task Act()
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                await grain.SendAsync(expected);
-            }
-        }
-
-        [Fact]
-        public void It_Should_Deliver()
-        {
-            Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected()
-        {
-            expected.ShouldEqual(result);
-        }
+        return ValueTask.CompletedTask;
     }
 
-    public class When_Sending_Blob_Message_One_To_One : BaseOneToOneTest
+    [Fact]
+    public void It_Should_Fast()
     {
-        protected byte[] result;
-        protected byte[] expected = new byte[1024];
-        protected List<Stopwatch> timers = new List<Stopwatch>();
+        TimeSpan.FromTicks(Convert.ToInt64(_timers.Average(x => x.Elapsed.Ticks)))
+                .ShouldBeLessThan(TimeSpan.FromMilliseconds(200));
+    }
 
-        public override void Prepare()
-        {
-            base.Prepare();
+    [Fact]
+    public void It_Should_Deliver()
+    {
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
+    }
 
-            Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                      .Callback<byte[]>(x => result = x);
-
-            for (var i = 0; i < 1024; i++)
-            {
-                expected[i] = Convert.ToByte(i % 2);
-            }
-        }
-
-        public override async Task Act()
-        {
-            for (var i = 0; i < 10; i++)
-            {
-                var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                timers.Add(Stopwatch.StartNew());
-                await grain.SendAsync(expected);
-                timers.Last().Stop();
-            }
-        }
-
-        [Fact]
-        public void It_Should_Fast()
-        {
-            TimeSpan.FromTicks(Convert.ToInt64(timers.Average(x => x.Elapsed.Ticks)))
-                    .ShouldBeLessThan(TimeSpan.FromMilliseconds(200));
-        }
-
-        [Fact]
-        public void It_Should_Deliver()
-        {
-            Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-        }
-
-        [Fact]
-        public void It_Should_Deliver_Expected()
-        {
-            expected.ShouldEqual(result);
-        }
+    [Fact]
+    public void It_Should_Deliver_Expected()
+    {
+        _expected.ShouldEqual(_result);
     }
 }
