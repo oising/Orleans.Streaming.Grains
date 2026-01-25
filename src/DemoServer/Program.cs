@@ -1,3 +1,6 @@
+using Orleans.Providers;
+using Orleans.Streaming.Grains.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // aspire app host setup
@@ -6,7 +9,12 @@ builder.AddServiceDefaults();
 // Orleans set up
 builder.AddKeyedAzureTableServiceClient("clustering");
 builder.AddKeyedAzureBlobServiceClient("grainstate");
-builder.UseOrleans();
+builder.UseOrleans(silo =>
+{
+    silo.AddActivityPropagation();
+    silo.AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME);
+    silo.AddGrainsStreams("GrainsStreamProvider", 4, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5));
+});
 
 // Add services to the container.
 builder.Services.AddControllers();

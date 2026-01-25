@@ -33,8 +33,8 @@
     <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Client" Version="9.2.1" />
-    <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" />
-    <PackageReference Include="Microsoft.Orleans.Streaming" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Client" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Server" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Streaming" Version="10.0.0" />
   </ItemGroup>
 </Project>

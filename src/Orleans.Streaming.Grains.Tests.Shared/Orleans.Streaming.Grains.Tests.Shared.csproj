@@ -10,9 +10,9 @@
     <AdditionalFiles Include="..\stylecop.json" Link="stylecop.json" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Client" Version="9.2.1" />
-    <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" />
-    <PackageReference Include="Microsoft.Orleans.BroadcastChannel" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Client" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Orleans.Server" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Orleans.BroadcastChannel" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Orleans.Streaming.Grains\Orleans.Streaming.Grains.csproj" />
