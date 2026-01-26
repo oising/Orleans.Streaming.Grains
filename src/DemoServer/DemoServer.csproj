@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.ServiceDefaults\Aspire.ServiceDefaults.csproj" />
-    <ProjectReference Include="..\Orleans.Streaming.Grains\Orleans.Streaming.Grains.csproj" />
+    <ProjectReference Include="..\Orleans.Streaming.Grains.Tests.Shared\Orleans.Streaming.Grains.Tests.Shared.csproj" />
   </ItemGroup>
 
 </Project>

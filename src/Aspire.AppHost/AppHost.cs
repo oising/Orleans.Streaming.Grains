@@ -4,7 +4,7 @@ var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 var clusteringTable = storage.AddTables("clustering");
 var grainStorage = storage.AddBlobs("grainstate");
 
-var orleans = builder.AddOrleans("my-app")
+var orleans = builder.AddOrleans("stream-demo")
                      .WithClustering(clusteringTable)
                      .WithGrainStorage("Default", grainStorage);
 
