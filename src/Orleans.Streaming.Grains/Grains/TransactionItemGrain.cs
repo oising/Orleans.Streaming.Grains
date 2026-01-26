@@ -54,12 +54,13 @@ public class TransactionItemGrain<T> : Grain<TransactionItemGrainState<T>>, ITra
 
     public async Task PersistAsync()
     {
-        if (_deleted)
+        if (_deleted && State.Persisted)
         {
             await ClearStateAsync();
         }
         else
         {
+            State.Persisted = true;
             await WriteStateAsync();
         }
     }

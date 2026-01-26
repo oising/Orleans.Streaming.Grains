@@ -12,4 +12,7 @@ public class TransactionItemGrainState<T>
 {
     [Id(0)]
     public Immutable<T> Item { get; set; }
+
+    [Id(1)]
+    public bool Persisted { get; set; }
 }
