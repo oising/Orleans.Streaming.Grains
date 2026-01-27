@@ -15,43 +15,42 @@ using Orleans.Serialization;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streams;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsQueueAdapter : IQueueAdapter
 {
-    public class GrainsQueueAdapter : IQueueAdapter
+    private readonly string _providerName;
+    private readonly GrainsOptions _options;
+    private readonly ITransactionService _service;
+    private readonly IStreamQueueMapper _streamQueueMapper;
+    private readonly Serializer<GrainsBatchContainer> _serializer;
+
+    public GrainsQueueAdapter(string providerName,
+                              Serializer serializer,
+                              GrainsOptions options,
+                              ITransactionService service,
+                              IStreamQueueMapper streamQueueMapper)
     {
-        private readonly string _providerName;
-        private readonly GrainsOptions _options;
-        private readonly ITransactionService _service;
-        private readonly IStreamQueueMapper _streamQueueMapper;
-        private readonly Serializer<GrainsBatchContainer> _serializer;
+        _options = options;
+        _service = service;
+        _providerName = providerName;
+        _streamQueueMapper = streamQueueMapper;
+        _serializer = serializer.GetSerializer<GrainsBatchContainer>();
+    }
 
-        public GrainsQueueAdapter(string providerName,
-                                  Serializer serializer,
-                                  GrainsOptions options,
-                                  ITransactionService service,
-                                  IStreamQueueMapper streamQueueMapper)
-        {
-            _options = options;
-            _service = service;
-            _providerName = providerName;
-            _streamQueueMapper = streamQueueMapper;
-            _serializer = serializer.GetSerializer<GrainsBatchContainer>();
-        }
+    public bool IsRewindable => false;
 
-        public bool IsRewindable => false;
+    public string Name => _providerName;
 
-        public string Name => _providerName;
+    public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
 
-        public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
+    public IQueueAdapterReceiver CreateReceiver(QueueId queueId) => new GrainsQueueAdapterReceiver(queueId, _service, _streamQueueMapper, _serializer);
 
-        public IQueueAdapterReceiver CreateReceiver(QueueId queueId) => new GrainsQueueAdapterReceiver(queueId, _service, _streamQueueMapper, _serializer);
+    public async Task QueueMessageBatchAsync<T>(StreamId streamId, IEnumerable<T> events, StreamSequenceToken token, Dictionary<string, object> requestContext)
+    {
+        var queue = _streamQueueMapper.GetQueueForStream(streamId);
+        var message = GrainsBatchContainer.ToMessage(_serializer, streamId, events, requestContext);
 
-        public async Task QueueMessageBatchAsync<T>(StreamId streamId, IEnumerable<T> events, StreamSequenceToken token, Dictionary<string, object> requestContext)
-        {
-            var queue = _streamQueueMapper.GetQueueForStream(streamId);
-            var message = GrainsBatchContainer.ToMessage(_serializer, streamId, events, requestContext);
-
-            await _service.PostAsync(new Immutable<GrainsMessage>(message), !_options.FireAndForgetDelivery, queue.ToString());
-        }
+        await _service.PostAsync(new Immutable<GrainsMessage>(message), !_options.FireAndForgetDelivery, queue.ToString());
     }
 }

@@ -3,47 +3,47 @@
 // </copyright>
 
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
+using Xunit;
 
-namespace Orleans.Streaming.Grains.Test
+namespace Orleans.Streaming.Grains.Test;
+
+public abstract class BaseTest<T> : IAsyncLifetime
+    where T : class
 {
-    public abstract class BaseTest<T>
-        where T : class
+    public BaseTest() => Services = new ServiceCollection();
+
+    public T Subject { get; private set; }
+
+    public ServiceCollection Services { get; }
+
+    public virtual ValueTask InitializeAsync()
     {
-        public BaseTest()
+        if (Services.All(x => x.ServiceType != typeof(T)))
         {
-            Services = new ServiceCollection();
+            Services.AddTransient<T>();
         }
 
-        public T Subject { get; private set; }
+        var provider = Services.BuildServiceProvider();
 
-        public ServiceCollection Services { get; }
-
-        [OneTimeSetUp]
-        public virtual Task SetupAsync()
+        if (provider != null)
         {
-            if (Services.All(x => x.ServiceType != typeof(T)))
+            var service = provider.GetService<T>();
+
+            if (service != null)
             {
-                Services.AddTransient<T>();
+                Subject = service;
             }
-
-            var provider = Services.BuildServiceProvider();
-
-            if (provider != null)
+            else
             {
-                var service = provider.GetService<T>();
-
-                if (service != null)
-                {
-                    Subject = service;
-                }
-                else
-                {
-                    throw new InvalidOperationException("Subject not registered.");
-                }
+                throw new InvalidOperationException("Subject not registered.");
             }
-
-            return Task.CompletedTask;
         }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public virtual ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
     }
 }

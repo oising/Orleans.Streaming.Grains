@@ -9,16 +9,15 @@ using System.Threading.Tasks;
 using Orleans;
 using Orleans.Concurrency;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionItemGrain<T> : IGrainWithGuidKey
 {
-    public interface ITransactionItemGrain<T> : IGrainWithGuidKey
-    {
-        Task<Immutable<T>> GetAsync();
+    Task<Immutable<T>> GetAsync();
 
-        Task SetAsync(Immutable<T> item);
+    Task SetAsync(Immutable<T> item);
 
-        Task DeleteAsync();
+    Task DeleteAsync();
 
-        Task PersistAsync();
-    }
+    Task PersistAsync();
 }

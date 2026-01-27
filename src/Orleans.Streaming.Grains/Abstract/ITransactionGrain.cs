@@ -9,22 +9,21 @@ using System.Threading.Tasks;
 using Orleans;
 using Orleans.Streaming.Grains.State;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionGrain : IGrainWithStringKey
 {
-    public interface ITransactionGrain : IGrainWithStringKey
-    {
-        Task FlushAsync();
+    Task FlushAsync();
 
-        Task<List<Guid>> PopAsync(int maxCount);
+    Task<List<Guid>> PopAsync(int maxCount);
 
-        Task PostAsync(Guid id);
+    Task PostAsync(Guid id);
 
-        Task CompleteAsync(Guid id, bool success);
+    Task CompleteAsync(Guid id, bool success);
 
-        Task<TransactionGrainState> GetStateAsync();
+    Task<TransactionGrainState> GetStateAsync();
 
-        Task SubscribeAsync(ITransactionObserver observer);
+    Task SubscribeAsync(ITransactionObserver observer);
 
-        Task UnsubscribeAsync(ITransactionObserver observer);
-    }
+    Task UnsubscribeAsync(ITransactionObserver observer);
 }

@@ -22,61 +22,53 @@ using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Orleans.TestingHost;
 using Serilog;
 
-namespace Orleans.Streaming.Grains.Test
+namespace Orleans.Streaming.Grains.Test;
+
+public abstract class BaseGrainTestConfig(bool fireAndForget = false) : ISiloConfigurator, IClientBuilderConfigurator
 {
-    public abstract class BaseGrainTestConfig : ISiloConfigurator, IClientBuilderConfigurator
+    public abstract void Configure(IServiceCollection services);
+
+    public void Configure(ISiloBuilder siloBuilder)
     {
-        private readonly bool _fireAndForget;
-
-        protected BaseGrainTestConfig(bool fireAndForget = false)
+        if (fireAndForget)
         {
-            _fireAndForget = fireAndForget;
+            siloBuilder.ConfigureServices(Configure)
+                       .ConfigureServices(ConfigureInner)
+                       .AddMemoryGrainStorageAsDefault()
+                       .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
+                       .AddGrainsStreams(name: ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
+                                         queueCount: 1,
+                                         retry: TimeSpan.FromSeconds(1),
+                                         poison: TimeSpan.FromSeconds(3));
         }
-
-        public abstract void Configure(IServiceCollection services);
-
-        public void Configure(ISiloBuilder siloBuilder)
+        else
         {
-            if (_fireAndForget)
-            {
-                siloBuilder.ConfigureServices(Configure)
-                           .ConfigureServices(ConfigureInner)
-                           .AddMemoryGrainStorageAsDefault()
-                           .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
-                           .AddGrainsStreams(name: ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
-                                             queueCount: 1,
-                                             retry: TimeSpan.FromSeconds(1),
-                                             poison: TimeSpan.FromSeconds(3));
-            }
-            else
-            {
 #pragma warning disable CS0618
-                siloBuilder.ConfigureServices(Configure)
-                           .ConfigureServices(ConfigureInner)
-                           .AddMemoryGrainStorageAsDefault()
-                           .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
-                           .AddGrainsStreamsForTests(name: ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
-                                                     queueCount: 3,
-                                                     retry: TimeSpan.FromSeconds(1),
-                                                     poison: TimeSpan.FromSeconds(3));
+            siloBuilder.ConfigureServices(Configure)
+                       .ConfigureServices(ConfigureInner)
+                       .AddMemoryGrainStorageAsDefault()
+                       .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
+                       .AddGrainsStreamsForTests(name: ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME,
+                                                 queueCount: 3,
+                                                 retry: TimeSpan.FromSeconds(1),
+                                                 poison: TimeSpan.FromSeconds(3));
 #pragma warning restore CS0618
-            }
         }
+    }
 
-        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
-        {
-        }
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
+    {
+    }
 
-        private void ConfigureInner(IServiceCollection services)
-        {
+    private void ConfigureInner(IServiceCollection services)
+    {
 #if DEBUG
-            var logger = new LoggerConfiguration()
-                .WriteTo.Debug()
-                .WriteTo.Console()
-                .CreateLogger();
+        var logger = new LoggerConfiguration()
+            .WriteTo.Debug()
+            .WriteTo.Console()
+            .CreateLogger();
 
-            services.AddLogging(l => l.AddSerilog(logger, dispose: true));
+        services.AddLogging(l => l.AddSerilog(logger, dispose: true));
 #endif
-        }
     }
 }

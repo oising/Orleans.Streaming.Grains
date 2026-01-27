@@ -8,30 +8,29 @@ using System.Linq;
 using System.Threading.Tasks;
 using Orleans.Streams;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsQueueBalancer : IStreamQueueBalancer
 {
-    public class GrainsQueueBalancer : IStreamQueueBalancer
+    private readonly List<QueueId> _queues;
+
+    public GrainsQueueBalancer()
     {
-        private readonly List<QueueId> _queues;
-
-        public GrainsQueueBalancer()
-        {
-            _queues = new List<QueueId>();
-        }
-
-        public IEnumerable<QueueId> GetMyQueues() => _queues;
-
-        public Task Initialize(IStreamQueueMapper queueMapper)
-        {
-            _queues.AddRange(queueMapper.GetAllQueues());
-
-            return Task.CompletedTask;
-        }
-
-        public Task Shutdown() => Task.CompletedTask;
-
-        public bool SubscribeToQueueDistributionChangeEvents(IStreamQueueBalanceListener observer) => false;
-
-        public bool UnSubscribeFromQueueDistributionChangeEvents(IStreamQueueBalanceListener observer) => false;
+        _queues = new List<QueueId>();
     }
+
+    public IEnumerable<QueueId> GetMyQueues() => _queues;
+
+    public Task Initialize(IStreamQueueMapper queueMapper)
+    {
+        _queues.AddRange(queueMapper.GetAllQueues());
+
+        return Task.CompletedTask;
+    }
+
+    public Task Shutdown() => Task.CompletedTask;
+
+    public bool SubscribeToQueueDistributionChangeEvents(IStreamQueueBalanceListener observer) => false;
+
+    public bool UnSubscribeFromQueueDistributionChangeEvents(IStreamQueueBalanceListener observer) => false;
 }

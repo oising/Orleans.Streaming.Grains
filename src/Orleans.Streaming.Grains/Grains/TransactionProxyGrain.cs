@@ -9,39 +9,38 @@ using System.Threading.Tasks;
 using Orleans.Concurrency;
 using Orleans.Streaming.Grains.Abstract;
 
-namespace Orleans.Streaming.Grains.Grains
+namespace Orleans.Streaming.Grains.Grains;
+
+[Reentrant]
+public class TransactionProxyGrain : Grain, ITransactionProxyGrain
 {
-    [Reentrant]
-    public class TransactionProxyGrain : Grain, ITransactionProxyGrain
+    private readonly TaskCompletionSource<bool> _task;
+
+    public TransactionProxyGrain()
     {
-        private readonly TaskCompletionSource<bool> _task;
+        _task = new TaskCompletionSource<bool>();
+    }
 
-        public TransactionProxyGrain()
+    public Task Task => _task.Task;
+
+    public Task CompletedAsync(Guid id, bool success, string queue)
+    {
+        if (id == this.GetPrimaryKey())
         {
-            _task = new TaskCompletionSource<bool>();
-        }
+            _task.SetResult(success);
 
-        public Task Task => _task.Task;
-
-        public Task CompletedAsync(Guid id, bool success, string queue)
-        {
-            if (id == this.GetPrimaryKey())
-            {
-                _task.SetResult(success);
-
-                var transaction = GrainFactory.GetGrain<ITransactionGrain>(queue);
-
-                transaction.UnsubscribeAsync(this.AsReference<ITransactionObserver>());
-            }
-
-            return Task.CompletedTask;
-        }
-
-        public async Task<bool> WaitAsync<T>(string queue)
-        {
             var transaction = GrainFactory.GetGrain<ITransactionGrain>(queue);
-            await transaction.SubscribeAsync(this.AsReference<ITransactionObserver>());
-            return await _task.Task;
+
+            transaction.UnsubscribeAsync(this.AsReference<ITransactionObserver>());
         }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task<bool> WaitAsync<T>(string queue)
+    {
+        var transaction = GrainFactory.GetGrain<ITransactionGrain>(queue);
+        await transaction.SubscribeAsync(this.AsReference<ITransactionObserver>());
+        return await _task.Task;
     }
 }

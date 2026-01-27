@@ -17,65 +17,64 @@ using Orleans.Serialization;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streams;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsQueueAdapterFactory : IQueueAdapterFactory
 {
-    public class GrainsQueueAdapterFactory : IQueueAdapterFactory
+    private readonly string _name;
+    private readonly Serializer _serializer;
+    private readonly ITransactionService _service;
+    private readonly GrainsOptions _grainsOptions;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly IQueueAdapterCache _adapterCache;
+    private readonly IStreamQueueMapper _streamQueueMapper;
+
+    public GrainsQueueAdapterFactory(string name,
+                                     Serializer serializer,
+                                     ITransactionService service,
+                                     GrainsOptions grainsOptions,
+                                     ILoggerFactory loggerFactory,
+                                     IStreamQueueMapper queueMapper,
+                                     SimpleQueueCacheOptions cacheOptions)
     {
-        private readonly string _name;
-        private readonly Serializer _serializer;
-        private readonly ITransactionService _service;
-        private readonly GrainsOptions _grainsOptions;
-        private readonly ILoggerFactory _loggerFactory;
-        private readonly IQueueAdapterCache _adapterCache;
-        private readonly IStreamQueueMapper _streamQueueMapper;
+        _name = name;
+        _service = service;
+        _serializer = serializer;
+        _grainsOptions = grainsOptions;
+        _loggerFactory = loggerFactory;
+        _streamQueueMapper = queueMapper;
+        _adapterCache = new SimpleQueueAdapterCache(cacheOptions, _name, _loggerFactory);
+    }
 
-        public GrainsQueueAdapterFactory(string name,
-                                         Serializer serializer,
-                                         ITransactionService service,
-                                         GrainsOptions grainsOptions,
-                                         ILoggerFactory loggerFactory,
-                                         IStreamQueueMapper queueMapper,
-                                         SimpleQueueCacheOptions cacheOptions)
-        {
-            _name = name;
-            _service = service;
-            _serializer = serializer;
-            _grainsOptions = grainsOptions;
-            _loggerFactory = loggerFactory;
-            _streamQueueMapper = queueMapper;
-            _adapterCache = new SimpleQueueAdapterCache(cacheOptions, _name, _loggerFactory);
-        }
+    public static GrainsQueueAdapterFactory Create(IServiceProvider services, string name)
+    {
+        var grainsOptions = services.GetOptionsByName<GrainsOptions>(name);
+        var queueMapper = services.GetKeyedService<IStreamQueueMapper>(name);
+        var cacheOptions = services.GetOptionsByName<SimpleQueueCacheOptions>(name);
+        var queueOptions = services.GetOptionsByName<HashRingStreamQueueMapperOptions>(name);
 
-        public static GrainsQueueAdapterFactory Create(IServiceProvider services, string name)
-        {
-            var grainsOptions = services.GetOptionsByName<GrainsOptions>(name);
-            var queueMapper = services.GetKeyedService<IStreamQueueMapper>(name);
-            var cacheOptions = services.GetOptionsByName<SimpleQueueCacheOptions>(name);
-            var queueOptions = services.GetOptionsByName<HashRingStreamQueueMapperOptions>(name);
+        return ActivatorUtilities.CreateInstance<GrainsQueueAdapterFactory>(services, name, cacheOptions, grainsOptions, queueMapper ?? new HashRingBasedStreamQueueMapper(queueOptions, name));
+    }
 
-            return ActivatorUtilities.CreateInstance<GrainsQueueAdapterFactory>(services, name, cacheOptions, grainsOptions, queueMapper ?? new HashRingBasedStreamQueueMapper(queueOptions, name));
-        }
+    public Task<IQueueAdapter> CreateAdapter()
+    {
+        var adapter = new GrainsQueueAdapter(_name, _serializer, _grainsOptions, _service, _streamQueueMapper);
 
-        public Task<IQueueAdapter> CreateAdapter()
-        {
-            var adapter = new GrainsQueueAdapter(_name, _serializer, _grainsOptions, _service, _streamQueueMapper);
+        return Task.FromResult<IQueueAdapter>(adapter);
+    }
 
-            return Task.FromResult<IQueueAdapter>(adapter);
-        }
+    public Task<IStreamFailureHandler> GetDeliveryFailureHandler(QueueId queueId)
+    {
+        return Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler());
+    }
 
-        public Task<IStreamFailureHandler> GetDeliveryFailureHandler(QueueId queueId)
-        {
-            return Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler());
-        }
+    public IQueueAdapterCache GetQueueAdapterCache()
+    {
+        return _adapterCache;
+    }
 
-        public IQueueAdapterCache GetQueueAdapterCache()
-        {
-            return _adapterCache;
-        }
-
-        public IStreamQueueMapper GetStreamQueueMapper()
-        {
-            return _streamQueueMapper;
-        }
+    public IStreamQueueMapper GetStreamQueueMapper()
+    {
+        return _streamQueueMapper;
     }
 }

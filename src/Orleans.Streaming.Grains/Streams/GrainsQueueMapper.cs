@@ -6,53 +6,52 @@ using System.Text;
 using Orleans.Runtime;
 using Orleans.Streams;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsQueueMapper : IStreamQueueMapper
 {
-    public class GrainsQueueMapper : IStreamQueueMapper
+    private static object @lock = new object();
+
+    private readonly Dictionary<string, Queue<QueueId>> _queues;
+    private readonly Dictionary<StreamId, QueueId> _pinnedQueues;
+
+    public GrainsQueueMapper(int countEach = 3)
     {
-        private static object @lock = new object();
+        var implicitSubscribers = AppDomain.CurrentDomain.GetAssemblies()
+                                                         .SelectMany(x => x.GetTypes())
+                                                         .Where(x => x.GetCustomAttributes(typeof(ImplicitStreamSubscriptionAttribute), true)?.Count() > 0)
+                                                         .ToList();
 
-        private readonly Dictionary<string, Queue<QueueId>> _queues;
-        private readonly Dictionary<StreamId, QueueId> _pinnedQueues;
+        var messageTypes = implicitSubscribers.SelectMany(x => Attribute.GetCustomAttributes(x, typeof(ImplicitStreamSubscriptionAttribute)))
+                                              .Select(x => (x as ImplicitStreamSubscriptionAttribute).Predicate.PredicatePattern.Split(':')[1])
+                                              .Distinct()
+                                              .ToList();
 
-        public GrainsQueueMapper(int countEach = 3)
+        _pinnedQueues = new Dictionary<StreamId, QueueId>();
+        _queues = messageTypes.SelectMany(x => Enumerable.Range(0, countEach)
+                                                         .Select(y => QueueId.GetQueueId(x, (uint)y, 0)))
+                              .GroupBy(x => x.GetStringNamePrefix())
+                              .ToDictionary(x => x.Key, x => new Queue<QueueId>(x));
+    }
+
+    public IEnumerable<QueueId> GetAllQueues() => _queues.Values.SelectMany(x => x);
+
+    public QueueId GetQueueForStream(StreamId streamId)
+    {
+        lock (@lock)
         {
-            var implicitSubscribers = AppDomain.CurrentDomain.GetAssemblies()
-                                                             .SelectMany(x => x.GetTypes())
-                                                             .Where(x => x.GetCustomAttributes(typeof(ImplicitStreamSubscriptionAttribute), true)?.Count() > 0)
-                                                             .ToList();
-
-            var messageTypes = implicitSubscribers.SelectMany(x => Attribute.GetCustomAttributes(x, typeof(ImplicitStreamSubscriptionAttribute)))
-                                                  .Select(x => (x as ImplicitStreamSubscriptionAttribute).Predicate.PredicatePattern.Split(':')[1])
-                                                  .Distinct()
-                                                  .ToList();
-
-            _pinnedQueues = new Dictionary<StreamId, QueueId>();
-            _queues = messageTypes.SelectMany(x => Enumerable.Range(0, countEach)
-                                                             .Select(y => QueueId.GetQueueId(x, (uint)y, 0)))
-                                  .GroupBy(x => x.GetStringNamePrefix())
-                                  .ToDictionary(x => x.Key, x => new Queue<QueueId>(x));
-        }
-
-        public IEnumerable<QueueId> GetAllQueues() => _queues.Values.SelectMany(x => x);
-
-        public QueueId GetQueueForStream(StreamId streamId)
-        {
-            lock (@lock)
+            if (_pinnedQueues.ContainsKey(streamId))
             {
-                if (_pinnedQueues.ContainsKey(streamId))
-                {
-                    return _pinnedQueues[streamId];
-                }
-
-                var queue = _queues[Encoding.UTF8.GetString(streamId.Namespace.Span)];
-                var queueId = queue.Dequeue();
-
-                queue.Enqueue(queueId);
-                _pinnedQueues[streamId] = queueId;
-
-                return queueId;
+                return _pinnedQueues[streamId];
             }
+
+            var queue = _queues[Encoding.UTF8.GetString(streamId.Namespace.Span)];
+            var queueId = queue.Dequeue();
+
+            queue.Enqueue(queueId);
+            _pinnedQueues[streamId] = queueId;
+
+            return queueId;
         }
     }
 }

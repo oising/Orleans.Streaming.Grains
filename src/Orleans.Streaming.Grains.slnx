@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Example/">
+    <Project Path="Aspire.AppHost/Aspire.AppHost.csproj" Id="d3573144-ab43-42f3-8eeb-499d753fdc5e" />
+    <Project Path="Aspire.ServiceDefaults/Aspire.ServiceDefaults.csproj" Id="acd21d7d-6c71-45d9-b983-f8b6c72e9479" />
+    <Project Path="DemoServer/DemoServer.csproj" />
+  </Folder>
+  <Project Path="Orleans.Streaming.Grains.Performance/Orleans.Streaming.Grains.Performance.csproj" />
+  <Project Path="Orleans.Streaming.Grains.Tests.Shared/Orleans.Streaming.Grains.Tests.Shared.csproj" />
+  <Project Path="Orleans.Streaming.Grains.Tests/Orleans.Streaming.Grains.Tests.csproj" />
+  <Project Path="Orleans.Streaming.Grains/Orleans.Streaming.Grains.csproj" />
+</Solution>

@@ -11,53 +11,52 @@ using Orleans.Streaming.Grains.Extensions;
 using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Orleans.TestingHost;
 
-namespace Orleans.Streaming.Grains.Performance.Configs
+namespace Orleans.Streaming.Grains.Performance.Configs;
+
+public abstract class MemoryStreamTestConfig : ISiloConfigurator, IClientBuilderConfigurator
 {
-    public abstract class MemoryStreamTestConfig : ISiloConfigurator, IClientBuilderConfigurator
+    public abstract void Configure(IServiceCollection services);
+
+    public void Configure(ISiloBuilder siloBuilder)
     {
-        public abstract void Configure(IServiceCollection services);
-
-        public void Configure(ISiloBuilder siloBuilder)
-        {
-            siloBuilder.ConfigureServices(Configure)
-                       .AddMemoryGrainStorageAsDefault()
-                       .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
-                       .AddMemoryStreams(ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME);
-        }
-
-        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
-        {
-        }
+        siloBuilder.ConfigureServices(Configure)
+                   .AddMemoryGrainStorageAsDefault()
+                   .AddMemoryGrainStorage(ProviderConstants.DEFAULT_PUBSUB_PROVIDER_NAME)
+                   .AddMemoryStreams(ProviderConstants.DEFAULT_STORAGE_PROVIDER_NAME);
     }
 
-    public class MemoryStreamConfig : MemoryStreamTestConfig, IDisposable
+    public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
     {
-        protected Mock<IProcessor> processor = new Mock<IProcessor>();
-        private bool _isDisposed;
+    }
+}
 
-        public override void Configure(IServiceCollection services)
-        {
-            services.AddSingleton(processor);
-            services.AddSingleton(processor.Object);
-        }
+public class MemoryStreamConfig : MemoryStreamTestConfig, IDisposable
+{
+    protected Mock<IProcessor> processor = new Mock<IProcessor>();
+    private bool _isDisposed;
 
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+    public override void Configure(IServiceCollection services)
+    {
+        services.AddSingleton(processor);
+        services.AddSingleton(processor.Object);
+    }
 
-        protected virtual void Dispose(bool disposing)
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_isDisposed)
         {
-            if (!_isDisposed)
+            if (disposing)
             {
-                if (disposing)
-                {
-                    /* dispose code here */
-                }
-
-                _isDisposed = true;
+                /* dispose code here */
             }
+
+            _isDisposed = true;
         }
     }
 }

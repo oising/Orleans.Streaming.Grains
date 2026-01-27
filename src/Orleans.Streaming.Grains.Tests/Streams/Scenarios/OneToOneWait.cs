@@ -2,152 +2,108 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using NUnit.Framework;
-using Orleans.Hosting;
-using Orleans.Streaming.Grains.Abstract;
-using Orleans.Streaming.Grains.Services;
-using Orleans.Streaming.Grains.Streams;
 using Orleans.Streaming.Grains.Test;
 using Orleans.Streaming.Grains.Tests.Streams.Grains;
 using Orleans.Streaming.Grains.Tests.Streams.Messages;
 using Should;
+using Xunit;
 
-namespace Orleans.Streaming.Grains.Test.Scenarios
+namespace Orleans.Streaming.Grains.Tests.Streams.Scenarios;
+
+[Collection(WaitClusterCollection.Name)]
+public class When_Sending_Simple_Message_One_To_One_Wait(WaitClusterFixture fixture) : IAsyncLifetime
 {
-    public class OneToOneWait
+    private string _result;
+    private string _expected = "text";
+
+    public async ValueTask InitializeAsync()
     {
-        public class Config : BaseGrainTestConfig, IDisposable
+        fixture.Processor.Reset();
+        fixture.Processor.Setup(x => x.Process(It.IsAny<string>()))
+                          .Callback<string>(x =>
+                          {
+                              if (x == _expected)
+                              {
+                                  _result = x;
+                              }
+                          });
+
+        for (var i = 0; i < 10; i++)
         {
-            protected Mock<IProcessor> processor = new Mock<IProcessor>();
-            private bool _isDisposed;
-
-            public Config()
-             : base(true)
-            {
-            }
-
-            public override void Configure(IServiceCollection services)
-            {
-                services.AddSingleton(processor);
-                services.AddSingleton(processor.Object);
-            }
-
-            public void Dispose()
-            {
-                Dispose(true);
-                GC.SuppressFinalize(this);
-            }
-
-            protected virtual void Dispose(bool disposing)
-            {
-                if (!_isDisposed)
-                {
-                    if (disposing)
-                    {
-                        /* dispose code here */
-                    }
-
-                    _isDisposed = true;
-                }
-            }
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.SendAsync(_expected);
         }
 
-        public abstract class BaseOneToOneWaitTest : BaseGrainTest<Config>
+        await fixture.WaitFor(() => _result);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Deliver()
+    {
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
+    }
+
+    [Fact]
+    public void It_Should_Deliver_Expected()
+    {
+        _expected.ShouldEqual(_result);
+    }
+}
+
+[Collection(WaitClusterCollection.Name)]
+public class When_Sending_Blob_Message_One_To_One_Wait(WaitClusterFixture fixture) : IAsyncLifetime
+{
+    private byte[] _result;
+    private byte[] _expected = new byte[1024];
+
+    public async ValueTask InitializeAsync()
+    {
+        fixture.Processor.Reset();
+
+        for (var i = 0; i < 1024; i++)
         {
-            protected Mock<IProcessor> Processor { get; set; }
-
-            public override void Prepare()
-            {
-                Processor = Container.GetService<Mock<IProcessor>>();
-
-                base.Prepare();
-            }
+            _expected[i] = Convert.ToByte(i % 2);
         }
 
-        public class When_Sending_Simple_Message_One_To_One : BaseOneToOneWaitTest
+        fixture.Processor.Setup(x => x.Process(It.IsAny<byte[]>()))
+                          .Callback<byte[]>(x =>
+                          {
+                              if (x != null && x.SequenceEqual(_expected))
+                              {
+                                  _result = x;
+                              }
+                          });
+
+        for (var i = 0; i < 10; i++)
         {
-            protected string result;
-            protected long resultCounter;
-            protected string expected = "text";
-
-            public override void Prepare()
-            {
-                base.Prepare();
-
-                Processor!.Setup(x => x.Process(It.IsAny<string>()))
-                          .Callback<string>(x => result = ++resultCounter == 10 ? x : null);
-            }
-
-            public override async Task Act()
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                    await grain.SendAsync(expected);
-                }
-
-                await WaitFor(() => result);
-            }
-
-            [Test]
-            public void It_Should_Deliver()
-            {
-                Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-            }
-
-            [Test]
-            public void It_Should_Deliver_Expected()
-            {
-                expected.ShouldEqual(result);
-            }
+            var grain = fixture.Client.GetGrain<IEmitterGrain>(Guid.NewGuid());
+            await grain.SendAsync(_expected);
         }
 
-        public class When_Sending_Blob_Message_One_To_One : BaseOneToOneWaitTest
-        {
-            protected byte[] result;
-            protected long resultCounter;
-            protected byte[] expected = new byte[1024];
+        await fixture.WaitFor(() => _result);
+    }
 
-            public override void Prepare()
-            {
-                base.Prepare();
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
 
-                Processor!.Setup(x => x.Process(It.IsAny<byte[]>()))
-                          .Callback<byte[]>(x => result = ++resultCounter == 10 ? x : null);
+    [Fact]
+    public void It_Should_Deliver()
+    {
+        fixture.Processor.Verify(x => x.Process(_expected), Times.AtLeast(10));
+    }
 
-                for (var i = 0; i < 1024; i++)
-                {
-                    expected[i] = Convert.ToByte(i % 2);
-                }
-            }
-
-            public override async Task Act()
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    var grain = Subject.GetGrain<IEmitterGrain>(Guid.NewGuid());
-
-                    await grain.SendAsync(expected);
-                }
-
-                await WaitFor(() => result);
-            }
-
-            [Test]
-            public void It_Should_Deliver()
-            {
-                Processor!.Verify(x => x.Process(expected), Times.Exactly(10));
-            }
-
-            [Test]
-            public void It_Should_Deliver_Expected()
-            {
-                expected.ShouldEqual(result);
-            }
-        }
+    [Fact]
+    public void It_Should_Deliver_Expected()
+    {
+        _expected.ShouldEqual(_result);
     }
 }

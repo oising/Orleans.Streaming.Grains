@@ -7,10 +7,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionProxyGrain : IGrainWithGuidKey, ITransactionObserver
 {
-    public interface ITransactionProxyGrain : IGrainWithGuidKey, ITransactionObserver
-    {
-        Task<bool> WaitAsync<T>(string queue);
-    }
+    Task<bool> WaitAsync<T>(string queue);
 }

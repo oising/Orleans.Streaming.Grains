@@ -2,16 +2,8 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
-using NUnit.Framework;
-using Orleans;
 using Orleans.Concurrency;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.Services;
@@ -19,230 +11,315 @@ using Orleans.Streaming.Grains.State;
 using Orleans.Streaming.Grains.Streams;
 using Orleans.Streaming.Grains.Test;
 using Should;
+using Xunit;
 
-namespace Orleans.Streaming.Grains.Tests.Grains
+namespace Orleans.Streaming.Grains.Tests.Grains;
+
+[Collection(TransactionClusterCollection.Name)]
+public class WhenPoppingEmpty(TransactionClusterFixture fixture) : IAsyncLifetime
 {
-    public class TransactionTests
+    private readonly string _grainId = $"popping-empty-{Guid.NewGuid()}";
+    private ITransactionService _service;
+    private List<(Guid Id, Immutable<int> Item)> _results;
+
+    public async ValueTask InitializeAsync()
     {
-        public class Config : BaseGrainTestConfig
-        {
-            public override void Configure(IServiceCollection services)
-            {
-            }
-        }
+        _service = fixture.Container.GetService<ITransactionService>();
+        _results = await _service.PopAsync<int>(_grainId, 1);
+    }
 
-        public abstract class BaseTransactionTest : BaseGrainTest<Config>
-        {
-            protected IClusterClient client;
-            protected ITransactionService service;
-            protected IOptions<GrainsOptions> settings;
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
 
-            protected TransactionGrainState state;
+    [Fact]
+    public void It_Should_Return_Null()
+    {
+        _results.ShouldBeEmpty();
+    }
+}
 
-            public override void Prepare()
-            {
-                client = Container.GetService<IClusterClient>();
-                service = Container.GetService<ITransactionService>();
-                settings = Container.GetService<IOptions<GrainsOptions>>();
-            }
-        }
+[Collection(TransactionClusterCollection.Name)]
+public class WhenPoppingSingle(TransactionClusterFixture fixture) : IAsyncLifetime
+{
+    private readonly string _grainId = $"popping-single-{Guid.NewGuid()}";
+    private IClusterClient _client;
+    private ITransactionService _service;
+    private TransactionGrainState _state;
+    private List<(Guid Id, Immutable<int> Item)> _results;
 
-        public class WhenPoppingEmpty : BaseTransactionTest
-        {
-            protected List<(Guid Id, Immutable<int> Item)> results;
+    public async ValueTask InitializeAsync()
+    {
+        _client = fixture.Container.GetService<IClusterClient>();
+        _service = fixture.Container.GetService<ITransactionService>();
 
-            public override async Task Act()
-            {
-                results = await service.PopAsync<int>("1", 1);
-            }
+        await _service.PostAsync(new Immutable<int>(100), false, _grainId);
 
-            [Test]
-            public void It_Should_Return_Null()
-            {
-                results.ShouldBeEmpty();
-            }
-        }
+        _results = await _service.PopAsync<int>(_grainId, 1);
 
-        public abstract class BaseWhenPoppingSingle : BaseTransactionTest
-        {
-            protected List<(Guid Id, Immutable<int> Item)> results;
+        var transaction = _client.GetGrain<ITransactionGrain>(_grainId);
 
-            public override void Prepare()
-            {
-                base.Prepare();
-            }
+        _state = await transaction.GetStateAsync();
+    }
 
-            [Test]
-            public void It_Should_Return()
-            {
-                results.ShouldNotBeEmpty();
-            }
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
 
-            [Test]
-            public void It_Should_Return_Item()
-            {
-                results.First().Item.Value.ShouldEqual(100);
-            }
+    [Fact]
+    public void It_Should_Return()
+    {
+        _results.ShouldNotBeEmpty();
+    }
 
-            [Test]
-            public void It_Should_Return_Id()
-            {
-                results.First().Id.ShouldNotEqual(Guid.Empty);
-            }
-        }
+    [Fact]
+    public void It_Should_Return_Item()
+    {
+        _results.First().Item.Value.ShouldEqual(100);
+    }
 
-        public class WhenPoppingSingle : BaseWhenPoppingSingle
-        {
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+    [Fact]
+    public void It_Should_Return_Id()
+    {
+        _results.First().Id.ShouldNotEqual(Guid.Empty);
+    }
 
-                results = await service.PopAsync<int>("1", 1);
+    [Fact]
+    public void State_Should_Have_Poison_Empty()
+    {
+        _state.Poison.ShouldBeEmpty();
+    }
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+    [Fact]
+    public void State_Should_Have_Queue_Empty()
+    {
+        _state.Queue.ShouldBeEmpty();
+    }
 
-                state = await transaction.GetStateAsync();
-            }
+    [Fact]
+    public void State_Should_Have_Transactions_Single()
+    {
+        _state.Transactions.Count.ShouldEqual(1);
+    }
+}
 
-            [Test]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
+[Collection(TransactionClusterCollection.Name)]
+public class WhenPoppingSingleTimeout(TransactionClusterFixture fixture) : IAsyncLifetime
+{
+    private readonly string _grainId = $"popping-single-timeout-{Guid.NewGuid()}";
+    private IClusterClient _client;
+    private ITransactionService _service;
+    private TransactionGrainState _state;
+    private List<(Guid Id, Immutable<int> Item)> _results;
 
-            [Test]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
+    public async ValueTask InitializeAsync()
+    {
+        _client = fixture.Container.GetService<IClusterClient>();
+        _service = fixture.Container.GetService<ITransactionService>();
 
-            [Test]
-            public void State_Should_Have_Transactions_Single()
-            {
-                state.Transactions.Count.ShouldEqual(1);
-            }
-        }
+        await _service.PostAsync(new Immutable<int>(100), false, _grainId);
 
-        public class WhenPoppingSingleTimeout : BaseWhenPoppingSingle
-        {
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+        _results = await _service.PopAsync<int>(_grainId, 1);
 
-                results = await service.PopAsync<int>("1", 1);
+        var transaction = _client.GetGrain<ITransactionGrain>(_grainId);
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+        await Task.Delay(TimeSpan.FromSeconds(2));
 
-                await Task.Delay(TimeSpan.FromSeconds(2));
+        _state = await transaction.GetStateAsync();
+    }
 
-                state = await transaction.GetStateAsync();
-            }
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
 
-            [Test]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
+    [Fact]
+    public void It_Should_Return()
+    {
+        _results.ShouldNotBeEmpty();
+    }
 
-            [Test]
-            public void State_Should_Have_Queue_One()
-            {
-                state.Queue.Count.ShouldEqual(1);
-            }
+    [Fact]
+    public void It_Should_Return_Item()
+    {
+        _results.First().Item.Value.ShouldEqual(100);
+    }
 
-            [Test]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.Count.ShouldEqual(1);
-            }
-        }
+    [Fact]
+    public void It_Should_Return_Id()
+    {
+        _results.First().Id.ShouldNotEqual(Guid.Empty);
+    }
 
-        public class WhenPoppingSingleAfterComplete : BaseWhenPoppingSingle
-        {
-            protected List<(Guid Id, Immutable<int> Item)> results2;
+    [Fact]
+    public void State_Should_Have_Poison_Empty()
+    {
+        _state.Poison.ShouldBeEmpty();
+    }
 
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+    [Fact]
+    public void State_Should_Have_Queue_One()
+    {
+        _state.Queue.Count.ShouldEqual(1);
+    }
 
-                results = await service.PopAsync<int>("1", 1);
+    [Fact]
+    public void State_Should_Have_Transactions_Empty()
+    {
+        _state.Transactions.Count.ShouldEqual(1);
+    }
+}
 
-                await service.CompleteAsync<int>(results.First().Id, true, "1");
+[Collection(TransactionClusterCollection.Name)]
+public class WhenPoppingSingleAfterComplete(TransactionClusterFixture fixture) : IAsyncLifetime
+{
+    private readonly string _grainId = $"popping-after-complete-{Guid.NewGuid()}";
+    private IClusterClient _client;
+    private ITransactionService _service;
+    private TransactionGrainState _state;
+    private List<(Guid Id, Immutable<int> Item)> _results;
+    private List<(Guid Id, Immutable<int> Item)> _results2;
 
-                results2 = await service.PopAsync<int>("1", 1);
+    public async ValueTask InitializeAsync()
+    {
+        _client = fixture.Container.GetService<IClusterClient>();
+        _service = fixture.Container.GetService<ITransactionService>();
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+        await _service.PostAsync(new Immutable<int>(100), false, _grainId);
 
-                state = await transaction.GetStateAsync();
-            }
+        _results = await _service.PopAsync<int>(_grainId, 1);
 
-            [Test]
-            public void It_Should_Return_Second_Null()
-            {
-                results2.ShouldBeEmpty();
-            }
+        await _service.CompleteAsync<int>(_results.First().Id, true, _grainId);
 
-            [Test]
-            public void State_Should_Have_Poison_Empty()
-            {
-                state.Poison.ShouldBeEmpty();
-            }
+        _results2 = await _service.PopAsync<int>(_grainId, 1);
 
-            [Test]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
+        var transaction = _client.GetGrain<ITransactionGrain>(_grainId);
 
-            [Test]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.ShouldBeEmpty();
-            }
-        }
+        _state = await transaction.GetStateAsync();
+    }
 
-        public class WhenPoppingSingleAfterCompletePoison : BaseWhenPoppingSingle
-        {
-            protected List<(Guid Id, Immutable<int> Item)> results2;
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
 
-            public override async Task Act()
-            {
-                await service.PostAsync(new Immutable<int>(100), false, "1");
+    [Fact]
+    public void It_Should_Return()
+    {
+        _results.ShouldNotBeEmpty();
+    }
 
-                results = await service.PopAsync<int>("1", 1);
+    [Fact]
+    public void It_Should_Return_Item()
+    {
+        _results.First().Item.Value.ShouldEqual(100);
+    }
 
-                await service.CompleteAsync<int>(results.First().Id, false, "1");
+    [Fact]
+    public void It_Should_Return_Id()
+    {
+        _results.First().Id.ShouldNotEqual(Guid.Empty);
+    }
 
-                results2 = await service.PopAsync<int>("1", 1);
+    [Fact]
+    public void It_Should_Return_Second_Null()
+    {
+        _results2.ShouldBeEmpty();
+    }
 
-                var transaction = client.GetGrain<ITransactionGrain>("1");
+    [Fact]
+    public void State_Should_Have_Poison_Empty()
+    {
+        _state.Poison.ShouldBeEmpty();
+    }
 
-                state = await transaction.GetStateAsync();
-            }
+    [Fact]
+    public void State_Should_Have_Queue_Empty()
+    {
+        _state.Queue.ShouldBeEmpty();
+    }
 
-            [Test]
-            public void It_Should_Return_Second_Null()
-            {
-                results2.ShouldBeEmpty();
-            }
+    [Fact]
+    public void State_Should_Have_Transactions_Empty()
+    {
+        _state.Transactions.ShouldBeEmpty();
+    }
+}
 
-            [Test]
-            public void State_Should_Have_Poison_Single()
-            {
-                state.Poison.Count.ShouldEqual(1);
-            }
+[Collection(TransactionClusterCollection.Name)]
+public class WhenPoppingSingleAfterCompletePoison(TransactionClusterFixture fixture) : IAsyncLifetime
+{
+    private readonly string _grainId = $"popping-after-complete-poison-{Guid.NewGuid()}";
+    private IClusterClient _client;
+    private ITransactionService _service;
+    private TransactionGrainState _state;
+    private List<(Guid Id, Immutable<int> Item)> _results;
+    private List<(Guid Id, Immutable<int> Item)> _results2;
 
-            [Test]
-            public void State_Should_Have_Queue_Empty()
-            {
-                state.Queue.ShouldBeEmpty();
-            }
+    public async ValueTask InitializeAsync()
+    {
+        _client = fixture.Container.GetService<IClusterClient>();
+        _service = fixture.Container.GetService<ITransactionService>();
 
-            [Test]
-            public void State_Should_Have_Transactions_Empty()
-            {
-                state.Transactions.ShouldBeEmpty();
-            }
-        }
+        await _service.PostAsync(new Immutable<int>(100), false, _grainId);
+
+        _results = await _service.PopAsync<int>(_grainId, 1);
+
+        await _service.CompleteAsync<int>(_results.First().Id, false, _grainId);
+
+        _results2 = await _service.PopAsync<int>(_grainId, 1);
+
+        var transaction = _client.GetGrain<ITransactionGrain>(_grainId);
+
+        _state = await transaction.GetStateAsync();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public void It_Should_Return()
+    {
+        _results.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void It_Should_Return_Item()
+    {
+        _results.First().Item.Value.ShouldEqual(100);
+    }
+
+    [Fact]
+    public void It_Should_Return_Id()
+    {
+        _results.First().Id.ShouldNotEqual(Guid.Empty);
+    }
+
+    [Fact]
+    public void It_Should_Return_Second_Null()
+    {
+        _results2.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void State_Should_Have_Poison_Single()
+    {
+        _state.Poison.Count.ShouldEqual(1);
+    }
+
+    [Fact]
+    public void State_Should_Have_Queue_Empty()
+    {
+        _state.Queue.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void State_Should_Have_Transactions_Empty()
+    {
+        _state.Transactions.ShouldBeEmpty();
     }
 }

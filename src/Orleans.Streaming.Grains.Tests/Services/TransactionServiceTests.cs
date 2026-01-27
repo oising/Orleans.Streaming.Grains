@@ -2,202 +2,195 @@
 // Copyright (c) Surveily Sp. z o.o.. All rights reserved.
 // </copyright>
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using NUnit.Framework;
-using Orleans;
 using Orleans.Concurrency;
-using Orleans.Providers;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streaming.Grains.Services;
 using Orleans.Streaming.Grains.Test;
 using Should;
+using Xunit;
 
-namespace Orleans.Streaming.Grains.Tests.Services
+namespace Orleans.Streaming.Grains.Tests.Services;
+
+public class TransactionServiceTests
 {
-    public class TransactionServiceTests
+    public abstract class BaseTransactionServiceTest : BaseTest<TransactionService>
     {
-        public abstract class BaseTransactionServiceTest : BaseTest<TransactionService>
+        protected Guid itemId;
+        protected List<Guid> ids;
+        protected Immutable<int> item;
+        protected Mock<IClusterClient> client;
+        protected Mock<ITransactionGrain> transaction;
+        protected Mock<ITransactionReaderGrain<int>> reader;
+        protected Mock<ITransactionItemGrain<int>> message;
+        protected List<(Guid Id, Immutable<int> Item)> items;
+
+        public BaseTransactionServiceTest()
         {
-            protected Guid itemId;
-            protected List<Guid> ids;
-            protected Immutable<int> item;
-            protected Mock<IClusterClient> client;
-            protected Mock<ITransactionGrain> transaction;
-            protected Mock<ITransactionReaderGrain<int>> reader;
-            protected Mock<ITransactionItemGrain<int>> message;
-            protected List<(Guid Id, Immutable<int> Item)> items;
+            ids = new List<Guid>();
+            item = new Immutable<int>(100);
+            client = new Mock<IClusterClient>();
+            transaction = new Mock<ITransactionGrain>();
+            message = new Mock<ITransactionItemGrain<int>>();
+            reader = new Mock<ITransactionReaderGrain<int>>();
+            items = new List<(Guid Id, Immutable<int> Item)>();
 
-            public BaseTransactionServiceTest()
-            {
-                ids = new List<Guid>();
-                item = new Immutable<int>(100);
-                client = new Mock<IClusterClient>();
-                transaction = new Mock<ITransactionGrain>();
-                message = new Mock<ITransactionItemGrain<int>>();
-                reader = new Mock<ITransactionReaderGrain<int>>();
-                items = new List<(Guid Id, Immutable<int> Item)>();
+            client.Setup(x => x.GetGrain<ITransactionItemGrain<int>>(It.IsAny<Guid>(), null))
+                  .Callback<Guid, string>((id, _) =>
+                  {
+                      itemId = id;
+                      ids.Add(itemId);
+                      items.Add((itemId, item));
+                  })
+                  .Returns(message.Object);
 
-                client.Setup(x => x.GetGrain<ITransactionItemGrain<int>>(It.IsAny<Guid>(), null))
-                      .Callback<Guid, string>((id, _) =>
-                      {
-                          itemId = id;
-                          ids.Add(itemId);
-                          items.Add((itemId, item));
-                      })
-                      .Returns(message.Object);
+            client.Setup(x => x.GetGrain<ITransactionGrain>("1", null))
+                  .Returns(transaction.Object);
 
-                client.Setup(x => x.GetGrain<ITransactionGrain>("1", null))
-                      .Returns(transaction.Object);
+            client.Setup(x => x.GetGrain<ITransactionReaderGrain<int>>("1", null))
+                  .Returns(reader.Object);
 
-                client.Setup(x => x.GetGrain<ITransactionReaderGrain<int>>("1", null))
-                      .Returns(reader.Object);
+            message.Setup(x => x.SetAsync(It.IsAny<Immutable<int>>()))
+                   .Returns(Task.CompletedTask);
 
-                message.Setup(x => x.SetAsync(It.IsAny<Immutable<int>>()))
+            reader.Setup(x => x.GetAsync(ids))
+                  .ReturnsAsync(new Immutable<List<(Guid Id, Immutable<int> Item)>>(items));
+
+            transaction.Setup(x => x.PopAsync(1))
+                       .ReturnsAsync(ids);
+
+            transaction.Setup(x => x.PostAsync(itemId))
                        .Returns(Task.CompletedTask);
 
-                reader.Setup(x => x.GetAsync(ids))
-                      .ReturnsAsync(new Immutable<List<(Guid Id, Immutable<int> Item)>>(items));
+            Services.AddSingleton(client.Object);
+        }
+    }
 
-                transaction.Setup(x => x.PopAsync(1))
-                           .ReturnsAsync(ids);
-
-                transaction.Setup(x => x.PostAsync(itemId))
-                           .Returns(Task.CompletedTask);
-
-                Services.AddSingleton(client.Object);
-            }
+    public class WhenPosting : BaseTransactionServiceTest
+    {
+        public override async ValueTask InitializeAsync()
+        {
+            await base.InitializeAsync();
+            await Subject.PostAsync(item, false, "1");
         }
 
-        public class WhenPosting : BaseTransactionServiceTest
+        [Fact]
+        public void It_Should_Get_Item()
         {
-            public override async Task SetupAsync()
-            {
-                await base.SetupAsync();
-                await Subject.PostAsync(item, false, "1");
-            }
-
-            [Test]
-            public void It_Should_Get_Item()
-            {
-                client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Once);
-            }
-
-            [Test]
-            public void It_Should_Get_Transaction()
-            {
-                client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Once);
-            }
-
-            [Test]
-            public void It_Should_Set_Item()
-            {
-                message.Verify(x => x.SetAsync(item), Times.Once);
-            }
-
-            [Test]
-            public void It_Should_Post_Id()
-            {
-                transaction.Verify(x => x.PostAsync(itemId), Times.Once);
-            }
+            client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Once);
         }
 
-        public class WhenPopingEmpty : BaseTransactionServiceTest
+        [Fact]
+        public void It_Should_Get_Transaction()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results;
-
-            public override async Task SetupAsync()
-            {
-                await base.SetupAsync();
-
-                results = await Subject.PopAsync<int>("1", 1);
-            }
-
-            [Test]
-            public void It_Should_Return_Null()
-            {
-                results.ShouldBeEmpty();
-            }
-
-            [Test]
-            public void It_Should_Pop()
-            {
-                transaction.Verify(x => x.PopAsync(1), Times.Once);
-            }
+            client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Once);
         }
 
-        public class WhenPopingSingle : BaseTransactionServiceTest
+        [Fact]
+        public void It_Should_Set_Item()
         {
-            protected List<(Guid Id, Immutable<int> Item)> results;
+            message.Verify(x => x.SetAsync(item), Times.Once);
+        }
 
-            public override async Task SetupAsync()
-            {
-                message.Setup(x => x.GetAsync())
-                       .ReturnsAsync(item);
+        [Fact]
+        public void It_Should_Post_Id()
+        {
+            transaction.Verify(x => x.PostAsync(itemId), Times.Once);
+        }
+    }
 
-                await base.SetupAsync();
-                await Subject.PostAsync(item, false, "1");
+    public class WhenPopingEmpty : BaseTransactionServiceTest
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results;
 
-                results = await Subject.PopAsync<int>("1", 1);
-            }
+        public override async ValueTask InitializeAsync()
+        {
+            await base.InitializeAsync();
 
-            [Test]
-            public void It_Should_Return()
-            {
-                results.ShouldNotBeEmpty();
-            }
+            results = await Subject.PopAsync<int>("1", 1);
+        }
 
-            [Test]
-            public void It_Should_Return_Id()
-            {
-                results.First().Id.ShouldEqual(itemId);
-            }
+        [Fact]
+        public void It_Should_Return_Null()
+        {
+            results.ShouldBeEmpty();
+        }
 
-            [Test]
-            public void It_Should_Return_Item()
-            {
-                results.First().Item.ShouldEqual(item);
-            }
+        [Fact]
+        public void It_Should_Pop()
+        {
+            transaction.Verify(x => x.PopAsync(1), Times.Once);
+        }
+    }
 
-            [Test]
-            public void It_Should_Get_Reader()
-            {
-                client.Verify(x => x.GetGrain<ITransactionReaderGrain<int>>("1", null), Times.Exactly(1));
-            }
+    public class WhenPopingSingle : BaseTransactionServiceTest
+    {
+        protected List<(Guid Id, Immutable<int> Item)> results;
 
-            [Test]
-            public void It_Should_Get_Item()
-            {
-                client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Exactly(1));
-            }
+        public override async ValueTask InitializeAsync()
+        {
+            message.Setup(x => x.GetAsync())
+                   .ReturnsAsync(item);
 
-            [Test]
-            public void It_Should_Get_Transaction()
-            {
-                client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Exactly(2));
-            }
+            await base.InitializeAsync();
+            await Subject.PostAsync(item, false, "1");
 
-            [Test]
-            public void It_Should_Set_Item()
-            {
-                message.Verify(x => x.SetAsync(item), Times.Once);
-            }
+            results = await Subject.PopAsync<int>("1", 1);
+        }
 
-            [Test]
-            public void It_Should_Post_Id()
-            {
-                transaction.Verify(x => x.PostAsync(itemId), Times.Once);
-            }
+        [Fact]
+        public void It_Should_Return()
+        {
+            results.ShouldNotBeEmpty();
+        }
 
-            [Test]
-            public void It_Should_Pop()
-            {
-                transaction.Verify(x => x.PopAsync(1), Times.Once);
-            }
+        [Fact]
+        public void It_Should_Return_Id()
+        {
+            results.First().Id.ShouldEqual(itemId);
+        }
+
+        [Fact]
+        public void It_Should_Return_Item()
+        {
+            results.First().Item.ShouldEqual(item);
+        }
+
+        [Fact]
+        public void It_Should_Get_Reader()
+        {
+            client.Verify(x => x.GetGrain<ITransactionReaderGrain<int>>("1", null), Times.Exactly(1));
+        }
+
+        [Fact]
+        public void It_Should_Get_Item()
+        {
+            client.Verify(x => x.GetGrain<ITransactionItemGrain<int>>(itemId, null), Times.Exactly(1));
+        }
+
+        [Fact]
+        public void It_Should_Get_Transaction()
+        {
+            client.Verify(x => x.GetGrain<ITransactionGrain>("1", null), Times.Exactly(2));
+        }
+
+        [Fact]
+        public void It_Should_Set_Item()
+        {
+            message.Verify(x => x.SetAsync(item), Times.Once);
+        }
+
+        [Fact]
+        public void It_Should_Post_Id()
+        {
+            transaction.Verify(x => x.PostAsync(itemId), Times.Once);
+        }
+
+        [Fact]
+        public void It_Should_Pop()
+        {
+            transaction.Verify(x => x.PopAsync(1), Times.Once);
         }
     }
 }

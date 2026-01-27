@@ -7,16 +7,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsOptions
 {
-    public class GrainsOptions
-    {
-        public int QueueCount { get; set; } = 1;
+    public int QueueCount { get; set; } = 1;
 
-        public bool FireAndForgetDelivery { get; set; } = true;
+    public bool FireAndForgetDelivery { get; set; } = true;
 
-        public TimeSpan RetryTimeout { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan RetryTimeout { get; set; } = TimeSpan.FromMinutes(1);
 
-        public TimeSpan PoisonTimeout { get; internal set; } = TimeSpan.FromMinutes(3);
-    }
+    public TimeSpan PoisonTimeout { get; internal set; } = TimeSpan.FromMinutes(3);
 }

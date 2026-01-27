@@ -9,84 +9,83 @@ using Orleans.TestingHost;
 using Polly;
 using Polly.Retry;
 
-namespace Orleans.Streaming.Grains.Performance
+namespace Orleans.Streaming.Grains.Performance;
+
+public abstract class BenchmarkBaseSilo<T>
+    where T : ISiloConfigurator, IClientBuilderConfigurator, new()
 {
-    public abstract class BenchmarkBaseSilo<T>
-        where T : ISiloConfigurator, IClientBuilderConfigurator, new()
+    private readonly TestCluster _cluster;
+    private readonly AsyncRetryPolicy _retryPolicy;
+
+    public BenchmarkBaseSilo()
     {
-        private readonly TestCluster _cluster;
-        private readonly AsyncRetryPolicy _retryPolicy;
+        _cluster = new TestClusterBuilder(1).AddSiloBuilderConfigurator<T>()
+                                            .AddClientBuilderConfigurator<T>()
+                                            .Build();
 
-        public BenchmarkBaseSilo()
+        _retryPolicy = Policy.Handle<OrleansMessageRejectionException>()
+                             .WaitAndRetryAsync(10, f => TimeSpan.FromSeconds(5));
+    }
+
+    protected IClusterClient Client => _cluster.Client;
+
+    protected IServiceProvider Container
+    {
+        get
         {
-            _cluster = new TestClusterBuilder(1).AddSiloBuilderConfigurator<T>()
-                                                .AddClientBuilderConfigurator<T>()
-                                                .Build();
+            var siloHandle = _cluster.Primary as InProcessSiloHandle;
 
-            _retryPolicy = Policy.Handle<OrleansMessageRejectionException>()
-                                 .WaitAndRetryAsync(10, f => TimeSpan.FromSeconds(5));
+            return siloHandle.SiloHost.Services;
         }
+    }
 
-        protected IClusterClient Client => _cluster.Client;
-
-        protected IServiceProvider Container
+    [GlobalSetup]
+    public async Task SetupAsync()
+    {
+        await _retryPolicy.ExecuteAsync(async () =>
         {
-            get
+            await _cluster.DeployAsync();
+            await _cluster.WaitForLivenessToStabilizeAsync();
+        });
+
+        Prepare();
+    }
+
+    [GlobalCleanup]
+    public async Task TearDown()
+    {
+        await _cluster.StopAllSilosAsync();
+        await _cluster.DisposeAsync();
+    }
+
+    protected virtual void Prepare()
+    {
+    }
+
+    protected async Task WaitFor(Func<object> subject)
+    {
+        await WaitFor(subject, TimeSpan.FromSeconds(15));
+    }
+
+    protected async Task WaitFor(Func<object> subject, TimeSpan timeout)
+    {
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            while (subject() == null)
             {
-                var siloHandle = _cluster.Primary as InProcessSiloHandle;
-
-                return siloHandle.SiloHost.Services;
-            }
-        }
-
-        [GlobalSetup]
-        public async Task SetupAsync()
-        {
-            await _retryPolicy.ExecuteAsync(async () =>
-            {
-                await _cluster.DeployAsync();
-                await _cluster.WaitForLivenessToStabilizeAsync();
-            });
-
-            Prepare();
-        }
-
-        [GlobalCleanup]
-        public async Task TearDown()
-        {
-            await _cluster.StopAllSilosAsync();
-            await _cluster.DisposeAsync();
-        }
-
-        protected virtual void Prepare()
-        {
-        }
-
-        protected async Task WaitFor(Func<object> subject)
-        {
-            await WaitFor(subject, TimeSpan.FromSeconds(15));
-        }
-
-        protected async Task WaitFor(Func<object> subject, TimeSpan timeout)
-        {
-            var sw = Stopwatch.StartNew();
-
-            try
-            {
-                while (subject() == null)
+                if (sw.Elapsed > timeout)
                 {
-                    if (sw.Elapsed > timeout)
-                    {
-                        throw new TimeoutException($"Timeout while waiting for subject.");
-                    }
-
-                    await Task.Delay(5);
+                    throw new TimeoutException($"Timeout while waiting for subject.");
                 }
+
+                await Task.Delay(5);
             }
-            finally
-            {
-                sw.Stop();
-            }
+        }
+        finally
+        {
+            sw.Stop();
         }
     }
 }

@@ -9,10 +9,9 @@ using System.Threading.Tasks;
 using Orleans;
 using Orleans.Concurrency;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionReaderGrain<T> : IGrainWithStringKey
 {
-    public interface ITransactionReaderGrain<T> : IGrainWithStringKey
-    {
-        Task<Immutable<List<(Guid Id, Immutable<T> Item)>>> GetAsync(List<Guid> ids);
-    }
+    Task<Immutable<List<(Guid Id, Immutable<T> Item)>>> GetAsync(List<Guid> ids);
 }

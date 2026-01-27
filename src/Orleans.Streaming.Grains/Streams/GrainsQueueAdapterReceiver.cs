@@ -12,58 +12,57 @@ using Orleans.Serialization;
 using Orleans.Streaming.Grains.Abstract;
 using Orleans.Streams;
 
-namespace Orleans.Streaming.Grains.Streams
+namespace Orleans.Streaming.Grains.Streams;
+
+public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
 {
-    public class GrainsQueueAdapterReceiver : IQueueAdapterReceiver
+    private readonly QueueId _queueId;
+    private readonly ITransactionService _service;
+    private readonly IStreamQueueMapper _streamQueueMapper;
+    private readonly Serializer<GrainsBatchContainer> _serializationManager;
+
+    private long _lastReadMessage;
+
+    public GrainsQueueAdapterReceiver(QueueId queueId,
+                                      ITransactionService service,
+                                      IStreamQueueMapper streamQueueMapper,
+                                      Serializer<GrainsBatchContainer> serializationManager)
     {
-        private readonly QueueId _queueId;
-        private readonly ITransactionService _service;
-        private readonly IStreamQueueMapper _streamQueueMapper;
-        private readonly Serializer<GrainsBatchContainer> _serializationManager;
+        _queueId = queueId;
+        _service = service;
+        _streamQueueMapper = streamQueueMapper;
+        _serializationManager = serializationManager;
+    }
 
-        private long _lastReadMessage;
+    public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
+    {
+        var result = new List<IBatchContainer>();
 
-        public GrainsQueueAdapterReceiver(QueueId queueId,
-                                          ITransactionService service,
-                                          IStreamQueueMapper streamQueueMapper,
-                                          Serializer<GrainsBatchContainer> serializationManager)
+        foreach (var message in await _service.PopAsync<GrainsMessage>(_queueId.ToString(), maxCount))
         {
-            _queueId = queueId;
-            _service = service;
-            _streamQueueMapper = streamQueueMapper;
-            _serializationManager = serializationManager;
+            result.Add(GrainsBatchContainer.FromMessage(_serializationManager, message.Id, message.Item.Value, _lastReadMessage++));
         }
 
-        public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
+        return result;
+    }
+
+    public Task Initialize(TimeSpan timeout)
+    {
+        return Task.CompletedTask;
+    }
+
+    public async Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
+    {
+        foreach (var message in messages.OfType<GrainsBatchContainer>())
         {
-            var result = new List<IBatchContainer>();
+            var queue = _streamQueueMapper.GetQueueForStream(message.StreamId);
 
-            foreach (var message in await _service.PopAsync<GrainsMessage>(_queueId.ToString(), maxCount))
-            {
-                result.Add(GrainsBatchContainer.FromMessage(_serializationManager, message.Id, message.Item.Value, _lastReadMessage++));
-            }
-
-            return result;
+            await _service.CompleteAsync<GrainsMessage>(message.Id, true, queue.ToString());
         }
+    }
 
-        public Task Initialize(TimeSpan timeout)
-        {
-            return Task.CompletedTask;
-        }
-
-        public async Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
-        {
-            foreach (var message in messages.OfType<GrainsBatchContainer>())
-            {
-                var queue = _streamQueueMapper.GetQueueForStream(message.StreamId);
-
-                await _service.CompleteAsync<GrainsMessage>(message.Id, true, queue.ToString());
-            }
-        }
-
-        public Task Shutdown(TimeSpan timeout)
-        {
-            return Task.CompletedTask;
-        }
+    public Task Shutdown(TimeSpan timeout)
+    {
+        return Task.CompletedTask;
     }
 }

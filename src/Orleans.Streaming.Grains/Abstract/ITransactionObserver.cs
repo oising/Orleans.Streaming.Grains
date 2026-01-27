@@ -7,10 +7,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Orleans.Streaming.Grains.Abstract
+namespace Orleans.Streaming.Grains.Abstract;
+
+public interface ITransactionObserver : IGrainObserver
 {
-    public interface ITransactionObserver : IGrainObserver
-    {
-        Task CompletedAsync(Guid id, bool success, string queue);
-    }
+    Task CompletedAsync(Guid id, bool success, string queue);
 }
