@@ -18,6 +18,12 @@ namespace Orleans.Streaming.Grains.Grains;
 public class TransactionItemGrain<T> : Grain<TransactionItemGrainState<T>>, ITransactionItemGrain<T>
 {
     private bool _deleted;
+    private readonly ILogger<TransactionItemGrain<T>> _logger;
+
+    public TransactionItemGrain(ILogger<TransactionItemGrain<T>> logger)
+    {
+        _logger = logger;
+    }
 
     public Task DeleteAsync()
     {
@@ -54,9 +60,12 @@ public class TransactionItemGrain<T> : Grain<TransactionItemGrainState<T>>, ITra
 
     public async Task PersistAsync()
     {
-        if (_deleted && State.Persisted)
+        if (_deleted)
         {
-            await ClearStateAsync();
+            if (State.Persisted)
+            {
+                await ClearStateAsync();
+            }
         }
         else
         {
